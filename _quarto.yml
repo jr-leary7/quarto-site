@@ -8,19 +8,21 @@ website:
   repo-actions: [edit, issue]
   repo-subdir: docs
   reader-mode: true
+  twitter-card:
+    creator: "@leary_jack"
+    site: "@UF"
+  open-graph: true
   navbar:
     search: true
     left:
-      - icon: github
-        href: https://github.com/jr-leary7
-      - icon: twitter 
-        href: https://twitter.com/leary_jack
       - index.qmd
       - about.qmd
 
 format:
   html:
-    theme: minty
+    theme:
+      light: minty
+      dark: darkly
     css: styles.css
     toc: true
 
