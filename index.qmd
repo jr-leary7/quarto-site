@@ -2,6 +2,7 @@
 title: "About"
 about:
   template: solana
+  image-width: 8em
   image: jl.jpg
   links:
     - icon: twitter
@@ -16,16 +17,36 @@ I am a first-year PhD student at the University of Florida under Dr. Rhonda Bach
 
 ## Education 
 
-University of Florida | Gainesville, FL
-MS in Biostatistics | Aug 2020 - May 2022
+**University of Florida** | PhD Biostatistics 
 
-University of North Carolina | Chapel Hill, NC
-BS in Statistics | Aug 2016 - May 2020
+Aug 2022 - Current
+
+----------
+
+**University of Florida** | MS Biostatistics 
+
+Aug 2020 - May 2022
+
+----------
+
+**University of North Carolina** | BS Statistics 
+
+Aug 2016 - May 2020
 
 ## Work Experience 
 
-University of Florida | Graduate Research / Teaching Assistant | May 2021 - present
+**University of Florida** | Graduate Research & Teaching Assistant 
 
-Blue Cross Blue Shield of Florida | Data Analyst | July 2020 - July 2022
+May 2021 - present
 
-University of North Carolina | Undergraduate Research Assistant | June 2019 - July 2020
+----------
+
+**Blue Cross Blue Shield of Florida** | Data Analyst 
+
+July 2020 - July 2022
+
+----------
+
+**University of North Carolina** | Undergraduate Research Assistant 
+
+June 2019 - July 2020
