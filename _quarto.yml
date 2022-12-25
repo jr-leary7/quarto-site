@@ -3,16 +3,24 @@ project:
   output-dir: docs
 
 website:
-  title: "quarto-site"
+  title: "Jack Leary"
+  repo-url: https://github.com/jr-leary7/quarto-site
+  repo-actions: [edit, issue]
+  repo-subdir: docs
+  reader-mode: true
   navbar:
+    search: true
     left:
-      - href: index.qmd
-        text: Home
+      - icon: github
+        href: https://github.com/jr-leary7
+      - icon: twitter 
+        href: https://twitter.com/leary_jack
+      - index.qmd
       - about.qmd
 
 format:
   html:
-    theme: cosmo
+    theme: minty
     css: styles.css
     toc: true
 
