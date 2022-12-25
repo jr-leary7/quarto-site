@@ -1,6 +1,31 @@
 ---
-title: "Home"
-listing:
-  categories: true
+title: "About"
+about:
+  template: solana
+  image: jl.jpg
+  links:
+    - icon: twitter
+      text: twitter
+      href: https://twitter.com/leary_jack
+    - icon: github
+      text: Github
+      href: https://github.com/jr-leary7
 ---
 
+I am a first-year PhD student at the University of Florida under Dr. Rhonda Bacher. My primary research interests is single cell RNA-seq computational method development, specifically with respect to clustering, trajectory inference, and differential expression.
+
+## Education 
+
+University of Florida | Gainesville, FL
+MS in Biostatistics | Aug 2020 - May 2022
+
+University of North Carolina | Chapel Hill, NC
+BS in Statistics | Aug 2016 - May 2020
+
+## Work Experience 
+
+University of Florida | Graduate Research / Teaching Assistant | May 2021 - present
+
+Blue Cross Blue Shield of Florida | Data Analyst | July 2020 - July 2022
+
+University of North Carolina | Undergraduate Research Assistant | June 2019 - July 2020
