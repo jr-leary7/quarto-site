@@ -4,5 +4,11 @@
   },
   "about.qmd": {
     "about.html": "4086e281"
+  },
+  "tutorials/SCISSORS_Reclustering.qmd": {
+    "SCISSORS_Reclustering.html": "2bfc9ac1"
+  },
+  "derivations/Intercept_Interpretation.qmd": {
+    "Intercept_Interpretation.html": "9f1e56de"
   }
 }

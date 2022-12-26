@@ -1,0 +1,26 @@
+---
+title: "Interpreting Intercepts in Linear Regression"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    self-contained: true
+    fig-format: retina
+    df-print: kable
+    link-external-newwindow: true
+execute: 
+  cache: true
+  freeze: auto
+---
+

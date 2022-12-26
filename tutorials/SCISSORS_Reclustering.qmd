@@ -1,0 +1,382 @@
+---
+title: "scRNA-seq Reclustering with `SCISSORS`"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    self-contained: true
+    fig-format: retina
+    df-print: kable
+    link-external-newwindow: true
+execute: 
+  cache: true
+  freeze: auto
+---
+
+# Introduction 
+
+In this tutorial we'll walk through a basic single cell analysis, with a focus on fine-tuning clustering results using the `{SCISSORS}` package, which I wrote during my time at UNC Chapel Hill. 
+
+# Libraries 
+
+If you haven't already, install the development version (currently v`r packageVersion("SCISSORS")`) of `{SCISSORS}` from [the GitHub repository](https://github.com/jr-leary7/SCISSORS).
+
+```{r, eval=FALSE}
+remotes:: install_github("jr-leary7/SCISSORS")
+```
+
+Next, we'll load the packages we need to process our single cell data, recluster the cells, and visualize the results. 
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+library(dplyr)       # data manipulation
+library(Seurat)      # scRNA-seq tools 
+library(ggplot2)     # plot utilities 
+library(SCISSORS)    # scRNA-seq reclustering 
+library(paletteer)   # color palettes 
+library(patchwork)   # plot combination
+library(SeuratData)  # datasets 
+```
+
+# Data 
+
+We'll load in the well-known [PBMC3k data from 10X Genomics](https://support.10xgenomics.com/single-cell-gene-expression/datasets/1.1.0/pbmc3k), which is often used in example workflows such as the [`{Seurat}` clustering vignette](https://satijalab.org/seurat/articles/pbmc3k_tutorial.html) and the [`scanpy` vignette](https://scanpy-tutorials.readthedocs.io/en/latest/pbmc3k.html). If you haven't already downloaded the dataset, this function will download the raw data for you and load it into your R session. 
+
+```{r}
+pbmc <- LoadData("pbmc3k")
+```
+
+# Analysis 
+
+## Preprocessing 
+
+We'll do some minor quality-control checking first by filtering out cells with a high percentage of mitochondrial reads or very low or high numbers of detected genes. 
+
+```{r}
+pbmc <- PercentageFeatureSet(pbmc, 
+                             pattern = "^MT-", 
+                             col.name = "percent_MT")
+pbmc <- pbmc[, pbmc$nFeature_RNA >= 200 & pbmc$nFeature_RNA <= 2500 & pbmc$percent_MT <= 10]
+```
+
+We'll process the raw counts in the usual fashion: QC, normalization, identification of highly variable genes (HVGs), linear & non-linear dimension reduction, and a broad clustering that will (hopefully) capture our major celltypes. When computing the shared nearest-neighbor (SNN) graph, we use the heuristic $k = \sqrt{n}$ for the number of nearest-neighbors to consider for each cell. This ensures that the clustering will be broad i.e., a smaller number of large clusters will be returned instead of a larger number of small clusters. 
+
+```{r, results='hide', message=FALSE, warning=FALSE}
+pbmc <- NormalizeData(pbmc, 
+                      normalization.method = "LogNormalize", 
+                      verbose = FALSE) %>% 
+        FindVariableFeatures(selection.method = "vst", 
+                             nfeatures = 3000, 
+                             verbose = FALSE) %>% 
+        CellCycleScoring(s.features = cc.genes.updated.2019$s.genes, 
+                         g2m.features = cc.genes.updated.2019$g2m.genes, 
+                         set.ident = FALSE) %>% 
+        AddMetaData(metadata = c(.$S.Score - .$G2M.Score), col.name = "CC_difference") %>% 
+        ScaleData(vars.to.regress = "CC_difference", verbose = FALSE) %>% 
+        RunPCA(features = VariableFeatures(.), 
+               npcs = 50, 
+               verbose = FALSE, 
+               seed.use = 312) %>% 
+        RunUMAP(reduction = "pca",
+                dims = 1:20, 
+                n.components = 2, 
+                metric = "cosine", 
+                seed.use = 312, 
+                verbose = FALSE) %>% 
+        FindNeighbors(reduction = "pca", 
+                      dims = 1:20, 
+                      k.param = sqrt(ncol(.)), 
+                      nn.method = "annoy", 
+                      annoy.metric = "cosine", 
+                      verbose = FALSE) %>% 
+        FindClusters(resolution = 0.3, 
+                     random.seed = 312, 
+                     verbose = FALSE)
+```
+
+Let's visualize the principal components. Notable genes in PC 1 include **MALAT1**, high abundance of which is [a common artifact of 10X-sequenced data](https://kb.10xgenomics.com/hc/en-us/articles/360004729092-Why-do-I-see-high-levels-of-Malat1-in-my-gene-expression-data-). PC 2 seems to separate NK cells (**NKG7**, **GZMB**) and myeloid cells (**HLA-DRA**, **CD79A**). PC 3 is composed of variation that could originate from platelets (**PPBP**). PCs 4-6 look like they separate several types of monocytic, T, NK, and dendritic cells. 
+
+```{r}
+DimHeatmap(pbmc, 
+           reduction = "pca", 
+           dims = 1:6, 
+           nfeatures = 15, 
+           combine = TRUE)
+```
+
+We visualize the Louvain clustering via a UMAP plot. We see 5 major clusters, which we'll annotate next. 
+
+```{r, message=FALSE, warning=FALSE}
+DimPlot(pbmc, pt.size = 1) + 
+  scale_color_paletteer_d("ggsci::nrc_npg") + 
+  labs(x = "UMAP 1", y = "UMAP 2") + 
+  theme(axis.ticks = element_blank(), 
+        axis.text = element_blank())
+```
+
+## Broad Annotations 
+
+First we identify CD8+ T-cells via **CD8A**, and CD4+ T-cells with **IL7R**. Lastly, **FCGR3A** (aka **CD16**) is specific to CD16+ monocytes. We can combine the plots using the `{patchwork}` package. 
+
+```{r, message=FALSE, warning=FALSE}
+p1 <- FeaturePlot(pbmc, features = "CD8A", pt.size = 1) + 
+      scale_color_gradientn(colours = paletteer_d("wesanderson::Zissou1")) + 
+      labs(x = "UMAP 1", y = "UMAP 2") + 
+      theme(axis.ticks = element_blank(), 
+            axis.text = element_blank())
+p2 <- FeaturePlot(pbmc, features = "IL7R", pt.size = 1) + 
+      scale_color_gradientn(colours = paletteer_d("wesanderson::Zissou1")) + 
+      labs(x = "UMAP 1", y = "UMAP 2") + 
+      theme(axis.ticks = element_blank(), 
+            axis.text = element_blank())
+p1 / p2
+```
+
+Next, we use **HLA-DRA** to broadly identify monocytic cells, and **FCGR3A** (aka **CD16**) to single out the CD16+ monocytes.  
+
+```{r, message=FALSE, warning=FALSE}
+p1 <- FeaturePlot(pbmc, features = "HLA-DRA", pt.size = 1) + 
+      scale_color_gradientn(colours = paletteer_d("wesanderson::Zissou1")) + 
+      labs(x = "UMAP 1", y = "UMAP 2") + 
+      theme(axis.ticks = element_blank(), 
+            axis.text = element_blank())
+p2 <- FeaturePlot(pbmc, features = "FCGR3A", pt.size = 1) + 
+      scale_color_gradientn(colours = paletteer_d("wesanderson::Zissou1")) + 
+      labs(x = "UMAP 1", y = "UMAP 2") + 
+      theme(axis.ticks = element_blank(), 
+            axis.text = element_blank())
+p1 / p2
+```
+
+Lastly, abundance of **MS4A1** points out a cluster of B cells. 
+
+```{r, message=FALSE, warning=FALSE}
+FeaturePlot(pbmc, features = "MS4A1", pt.size = 1) + 
+  scale_color_gradientn(colours = paletteer_d("wesanderson::Zissou1")) + 
+  labs(x = "UMAP 1", y = "UMAP 2") + 
+  theme(axis.ticks = element_blank(), 
+        axis.text = element_blank())
+```
+
+We'll add broad celltype labels to our object's metadata. 
+
+```{r}
+pbmc@meta.data <- mutate(pbmc@meta.data, 
+                         broad_celltype = case_when(seurat_clusters == 0 ~ "CD4+ T", 
+                                                    seurat_clusters == 1 ~ "Monocyte", 
+                                                    seurat_clusters == 2 ~ "CD8+ T", 
+                                                    seurat_clusters == 3 ~ "B", 
+                                                    seurat_clusters == 4 ~ "CD16+ Monocyte", 
+                                                    TRUE ~ NA_character_), 
+                         broad_celltype = factor(broad_celltype, levels = c("CD4+ T", 
+                                                                            "Monocyte", 
+                                                                            "CD8+ T", 
+                                                                            "B", 
+                                                                            "CD16+ Monocyte")))
+```
+
+And visualize the results. 
+
+```{r, message=FALSE, warning=FALSE}
+DimPlot(pbmc, pt.size = 1, group.by = "broad_celltype") + 
+  scale_color_paletteer_d("ggsci::nrc_npg") + 
+  labs(x = "UMAP 1", 
+       y = "UMAP 2", 
+       color = "Broad Celltype") + 
+  theme(axis.ticks = element_blank(), 
+        axis.text = element_blank(), 
+        plot.title = element_blank())
+```
+
+## Reclustering 
+
+From the plot above, there appears to be some visible subgroups in the monocyte cluster. With that being said - I would generally be very cautious about using UMAPs alone to define heterogeneous groups. In general, I would suggest using something like silhouette score distributions, other clustering statistics, or biological knowledge to determine subclustering targets. We can do this below using `SCISSORS::ComputSilhouetteScores()`, which returns a silhouette score for each individual cell. Visualizing the results can help us identify which clusters are "poor" fits. For more information, check out [the Wikipedia article on clustering scores](https://en.wikipedia.org/wiki/Cluster_analysis#Evaluation_and_assessment).  
+
+```{r}
+sil_scores <- ComputeSilhouetteScores(pbmc, avg = FALSE)
+```
+
+We can see that the B cell and CD16+ monocyte clusters seem to be well-fit, but the other clusters are less so. We'll focus on the other monocyte cluster, as it seems to have the highest variance. 
+
+```{r, message=FALSE, warning=FALSE}
+sil_scores %>% 
+  left_join(distinct(pbmc@meta.data, seurat_clusters, broad_celltype), 
+            by = c("Cluster" = "seurat_clusters")) %>% 
+  ggplot(aes(x = broad_celltype, y = Score, fill = broad_celltype)) + 
+  geom_violin(scale = "width", 
+              color = "black", 
+              draw_quantiles = 0.5, 
+              size = 0.75) + 
+  scale_fill_paletteer_d("ggsci::nrc_npg") + 
+  labs(y = "Silhouette Score", fill = "Broad Celltype") + 
+  theme_classic(base_size = 14) + 
+  theme(panel.grid.major.y = element_line(), 
+        axis.title.x = element_blank())
+```
+
+### Monocytes 
+
+```{r, message=FALSE, warning=FALSE}
+mono_reclust <- ReclusterCells(pbmc, 
+                               which.clust = 1, 
+                               use.parallel = FALSE, 
+                               n.HVG = 3000,
+                               n.PC = 15, 
+                               k.vals = c(20, 30, 40), 
+                               resolution.vals = c(.2, .3, .4), 
+                               random.seed = 312)
+```
+
+Let's check out the UMAP embedding:
+
+```{r, message=FALSE, warning=FALSE}
+DimPlot(mono_reclust) + 
+  scale_color_paletteer_d("MetBrewer::Egypt") + 
+  labs(x = "UMAP 1", 
+       y = "UMAP 2", 
+       color = "Subcluster") + 
+  theme(axis.ticks = element_blank(), 
+        axis.text = element_blank(), 
+        plot.title = element_blank())
+```
+
+Highly-specific abundance of **FCER1A** allows us to identify the dendritic cells in cluster 2. 
+
+```{r, warning=FALSE, message=FALSE}
+data.frame(exp = mono_reclust@assays$RNA@data["FCER1A", ], 
+           label = mono_reclust$seurat_clusters) %>% 
+  ggplot(aes(x = label, y = exp, fill = label)) + 
+  geom_violin(scale = "width",
+              color = "black", 
+              draw_quantiles = 0.5, 
+              size = 0.75) + 
+  scale_fill_paletteer_d("MetBrewer::Egypt") + 
+  labs(y = "FCER1A", fill = "Subcluster") + 
+  theme_classic(base_size = 14) + 
+  theme(axis.title.x = element_blank())
+```
+
+Both cluster 0 & cluster 1 seem to be CD14+, and cluster 1 appears to have slightly higher (but still low) abundance of **FCGR3A**. 
+
+```{r, message=FALSE, warning=FALSE}
+p1 <- data.frame(exp = mono_reclust@assays$RNA@data["CD14", ], 
+                 label = mono_reclust$seurat_clusters) %>% 
+      filter(label %in% c(0, 1)) %>% 
+      ggplot(aes(x = label, y = exp, fill = label)) + 
+      geom_violin(scale = "width",
+                  color = "black", 
+                  draw_quantiles = 0.5, 
+                  size = 0.75) + 
+      scale_fill_paletteer_d("MetBrewer::Egypt") + 
+      labs(y = "CD14", fill = "Subcluster") + 
+      theme_classic(base_size = 14) + 
+      theme(axis.title.x = element_blank())
+p2 <- data.frame(exp = mono_reclust@assays$RNA@data["FCGR3A", ], 
+                 label = mono_reclust$seurat_clusters) %>% 
+      filter(label %in% c(0, 1)) %>% 
+      ggplot(aes(x = label, y = exp, fill = label)) + 
+      geom_violin(scale = "width",
+                  color = "black", 
+                  draw_quantiles = 0.5, 
+                  size = 0.75) + 
+      scale_fill_paletteer_d("MetBrewer::Egypt") + 
+      labs(y = "FCGR3A", fill = "Subcluster") + 
+      theme_classic(base_size = 14) + 
+      theme(axis.title.x = element_blank())
+p1 / p2
+```
+
+From [Kapellos *et al* (2019)](https://doi.org/10.3389/fimmu.2019.02035), we know that intermediate monocytes have high abundance of **CD14**, low but non-zero abundance of **CD16** (which again is denoted **FCGR3A** in this dataset), and can be identified through higher abundance of other markers like **HLA-DPB1** and **CD74** in comparison to CD14+ monocytes. With all this information, we'll conclude that cluster 0 is likely composed of CD14+ monocytes and cluster 1 of intermediate monocytes. 
+
+```{r, message=FALSE, warning=FALSE}
+p1 <- data.frame(exp = mono_reclust@assays$RNA@data["HLA-DQB1", ], 
+                 label = mono_reclust$seurat_clusters) %>% 
+      filter(label %in% c(0, 1)) %>% 
+      ggplot(aes(x = label, y = exp, fill = label)) + 
+      geom_violin(scale = "width",
+                  color = "black", 
+                  draw_quantiles = 0.5, 
+                  size = 0.75) + 
+      scale_fill_paletteer_d("MetBrewer::Egypt") + 
+      labs(y = "HLA-DQB1", fill = "Subcluster") + 
+      theme_classic(base_size = 14) + 
+      theme(axis.title.x = element_blank())
+p2 <- data.frame(exp = mono_reclust@assays$RNA@data["CD74", ], 
+                 label = mono_reclust$seurat_clusters) %>% 
+      filter(label %in% c(0, 1)) %>% 
+      ggplot(aes(x = label, y = exp, fill = label)) + 
+      geom_violin(scale = "width",
+                  color = "black", 
+                  draw_quantiles = 0.5, 
+                  size = 0.75) + 
+      scale_fill_paletteer_d("MetBrewer::Egypt") + 
+      labs(y = "CD74", fill = "Subcluster") + 
+      theme_classic(base_size = 14) + 
+      theme(axis.title.x = element_blank())
+p1 / p2
+```
+
+Lastly, we can tell that cluster 3 is composed of platelets thanks to high abundance of **PPBP**. 
+
+```{r, message=FALSE, warning=FALSE}
+data.frame(exp = mono_reclust@assays$RNA@data["PPBP", ], 
+           label = mono_reclust$seurat_clusters) %>% 
+  ggplot(aes(x = label, y = exp, fill = label)) + 
+  geom_violin(scale = "width",
+              color = "black", 
+              draw_quantiles = 0.5, 
+              size = 0.75) + 
+  scale_fill_paletteer_d("MetBrewer::Egypt") + 
+  labs(y = "PPBP", fill = "Subcluster") + 
+  theme_classic(base_size = 14) + 
+  theme(axis.title.x = element_blank())
+```
+
+We can add the new subcluster labels back in to our original object using `SCISSORS::IntegrateSubclusters()`. We also add labels to the original object reflecting the subcluster annotations. 
+
+```{r}
+pbmc <- IntegrateSubclusters(pbmc, reclust.results = mono_reclust)
+pbmc@meta.data <- mutate(pbmc@meta.data, 
+                         celltype = case_when(seurat_clusters == 0 ~ "CD4+ T", 
+                                              seurat_clusters == 1 ~ "Platelet", 
+                                              seurat_clusters == 2 ~ "CD8+ T", 
+                                              seurat_clusters == 3 ~ "B", 
+                                              seurat_clusters == 4 ~ "CD16+ Monocyte", 
+                                              seurat_clusters == 5 ~ "CD14+ Monocyte", 
+                                              seurat_clusters == 6 ~ "Intermediate Monocyte", 
+                                              seurat_clusters == 7 ~ "Dendritic Cell", 
+                                              TRUE ~ NA_character_))
+```
+
+Here's the final celltype annotations on our original UMAP embedding. 
+
+```{r, message=FALSE, warning=FALSE}
+DimPlot(pbmc, group.by = "celltype", pt.size = 1) + 
+  scale_color_paletteer_d("ggsci::default_nejm") + 
+  labs(x = "UMAP 1", 
+       y = "UMAP 2", 
+       color = "Celltype") + 
+  theme(axis.ticks = element_blank(), 
+        axis.text = element_blank(), 
+        plot.title = element_blank())
+```
+
+# Conclusions 
+
+We were able to use `{SCISSORS}` to estimate a biologically meaningful subclustering that is to some degree supported by canonical marker genes from the literature. I'll note that while these monocyte subtype annotations might be useful, we didn't analyze the entire dataset;  those familiar with the PBMC3k dataset will know that what we labelled the CD8+ T cell cluster actually also contains NK cells. This analysis is not meant to be exhaustive or final, and serves mostly to show how and why `{SCISSORS}` is used. Please reach out to me with questions on the package [via email](mailto:jrleary@live.unc.edu) or by opening an issue on [the `{SCISSORS}` GitHub repository](https://github.com/jr-leary7/SCISSORS). 
+
+# Session Info 
+
+```{r}
+sessioninfo::session_info()
+```

@@ -1,0 +1,11 @@
+Seurat
+SeuratObject
+sp
+ggplot2
+magrittr
+SCISSORS
+SeuratData
+pbmc3k.SeuratData
+dplyr
+paletteer
+patchwork
