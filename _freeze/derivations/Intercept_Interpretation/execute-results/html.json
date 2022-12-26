@@ -1,0 +1,14 @@
+{
+  "hash": "458e2170615446a4309e0934f1ff3844",
+  "result": {
+    "markdown": "---\ntitle: \"Interpreting Intercepts in Linear Regression\"\nauthor:\n  name: Jack Leary\n  email: j.leary@ufl.edu\n  affiliations:\n    - name: University of Florida\n      department: Biostatistics \n      city: Gainesville\n      state: FL\ndate: \"2022-12-25\"\nformat:\n  html:\n    code-fold: show\n    code-copy: true\n    code-tools: true\n    toc: true\n    self-contained: true\n    fig-format: retina\n    df-print: kable\n    link-external-newwindow: true\nexecute: \n  cache: true\n  freeze: auto\n---\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

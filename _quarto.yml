@@ -12,11 +12,18 @@ website:
     creator: "@leary_jack"
     site: "@UF"
   open-graph: true
+  page-navigation: true
   navbar:
     search: true
     left:
       - index.qmd
       - about.qmd
+      - text: "Tutorials"
+        menu: 
+          - tutorials/SCISSORS_Reclustering.qmd
+      - text: "Derivations"
+        menu:
+          - derivations/Intercept_Interpretation.qmd
 
 format:
   html:
