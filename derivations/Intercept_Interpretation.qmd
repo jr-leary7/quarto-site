@@ -24,3 +24,6 @@ execute:
   freeze: auto
 ---
 
+```{r}
+1 + 1
+```
