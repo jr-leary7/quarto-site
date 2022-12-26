@@ -30,5 +30,4 @@ format:
     theme:
       light: minty
       dark: darkly
-    css: styles.css
     toc: true
