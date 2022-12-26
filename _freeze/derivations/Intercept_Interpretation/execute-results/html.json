@@ -1,7 +1,7 @@
 {
-  "hash": "458e2170615446a4309e0934f1ff3844",
+  "hash": "7e122e826814acd5fb9a27e6569f6338",
   "result": {
-    "markdown": "---\ntitle: \"Interpreting Intercepts in Linear Regression\"\nauthor:\n  name: Jack Leary\n  email: j.leary@ufl.edu\n  affiliations:\n    - name: University of Florida\n      department: Biostatistics \n      city: Gainesville\n      state: FL\ndate: \"2022-12-25\"\nformat:\n  html:\n    code-fold: show\n    code-copy: true\n    code-tools: true\n    toc: true\n    self-contained: true\n    fig-format: retina\n    df-print: kable\n    link-external-newwindow: true\nexecute: \n  cache: true\n  freeze: auto\n---\n",
+    "markdown": "---\ntitle: \"Interpreting Intercepts in Linear Regression\"\nauthor:\n  name: Jack Leary\n  email: j.leary@ufl.edu\n  affiliations:\n    - name: University of Florida\n      department: Biostatistics \n      city: Gainesville\n      state: FL\ndate: \"2022-12-25\"\nformat:\n  html:\n    code-fold: show\n    code-copy: true\n    code-tools: true\n    toc: true\n    self-contained: true\n    fig-format: retina\n    df-print: kable\n    link-external-newwindow: true\nexecute: \n  cache: true\n  freeze: auto\n---\n\n::: {.cell hash='Intercept_Interpretation_cache/html/unnamed-chunk-1_58faa88c4080e65593352cf6f448efdc'}\n\n```{.r .cell-code}\n1 + 1\n```\n\n::: {.cell-output .cell-output-stdout}\n```\n[1] 2\n```\n:::\n:::\n",
     "supporting": [],
     "filters": [
       "rmarkdown/pagebreak.lua"

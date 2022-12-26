@@ -263,7 +263,8 @@ data.frame(exp = mono_reclust@assays$RNA@data["FCER1A", ],
   scale_fill_paletteer_d("MetBrewer::Egypt") + 
   labs(y = "FCER1A", fill = "Subcluster") + 
   theme_classic(base_size = 14) + 
-  theme(axis.title.x = element_blank())
+  theme(panel.grid.major.y = element_line(), 
+        axis.title.x = element_blank())
 ```
 
 Both cluster 0 & cluster 1 seem to be CD14+, and cluster 1 appears to have slightly higher (but still low) abundance of **FCGR3A**. 
@@ -280,7 +281,8 @@ p1 <- data.frame(exp = mono_reclust@assays$RNA@data["CD14", ],
       scale_fill_paletteer_d("MetBrewer::Egypt") + 
       labs(y = "CD14", fill = "Subcluster") + 
       theme_classic(base_size = 14) + 
-      theme(axis.title.x = element_blank())
+      theme(panel.grid.major.y = element_line(), 
+            axis.title.x = element_blank())
 p2 <- data.frame(exp = mono_reclust@assays$RNA@data["FCGR3A", ], 
                  label = mono_reclust$seurat_clusters) %>% 
       filter(label %in% c(0, 1)) %>% 
@@ -292,7 +294,8 @@ p2 <- data.frame(exp = mono_reclust@assays$RNA@data["FCGR3A", ],
       scale_fill_paletteer_d("MetBrewer::Egypt") + 
       labs(y = "FCGR3A", fill = "Subcluster") + 
       theme_classic(base_size = 14) + 
-      theme(axis.title.x = element_blank())
+      theme(panel.grid.major.y = element_line(), 
+            axis.title.x = element_blank())
 p1 / p2
 ```
 
@@ -310,7 +313,8 @@ p1 <- data.frame(exp = mono_reclust@assays$RNA@data["HLA-DQB1", ],
       scale_fill_paletteer_d("MetBrewer::Egypt") + 
       labs(y = "HLA-DQB1", fill = "Subcluster") + 
       theme_classic(base_size = 14) + 
-      theme(axis.title.x = element_blank())
+      theme(panel.grid.major.y = element_line(), 
+            axis.title.x = element_blank())
 p2 <- data.frame(exp = mono_reclust@assays$RNA@data["CD74", ], 
                  label = mono_reclust$seurat_clusters) %>% 
       filter(label %in% c(0, 1)) %>% 
@@ -322,7 +326,8 @@ p2 <- data.frame(exp = mono_reclust@assays$RNA@data["CD74", ],
       scale_fill_paletteer_d("MetBrewer::Egypt") + 
       labs(y = "CD74", fill = "Subcluster") + 
       theme_classic(base_size = 14) + 
-      theme(axis.title.x = element_blank())
+      theme(panel.grid.major.y = element_line(), 
+            axis.title.x = element_blank())
 p1 / p2
 ```
 
@@ -339,7 +344,8 @@ data.frame(exp = mono_reclust@assays$RNA@data["PPBP", ],
   scale_fill_paletteer_d("MetBrewer::Egypt") + 
   labs(y = "PPBP", fill = "Subcluster") + 
   theme_classic(base_size = 14) + 
-  theme(axis.title.x = element_blank())
+  theme(panel.grid.major.y = element_line(), 
+        axis.title.x = element_blank())
 ```
 
 We can add the new subcluster labels back in to our original object using `SCISSORS::IntegrateSubclusters()`. We also add labels to the original object reflecting the subcluster annotations. 
