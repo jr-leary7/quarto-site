@@ -36,7 +36,7 @@ We're going to start from first principles here with a quick review on matrix al
 
 ### Theory 
 
-First define two matrices $A$ and $B$, each with 2 rows and 2 columns:
+First define two matrices $\mathbf{A}$ and $\mathbf{B}$, each with 2 rows and 2 columns:
 
 $$
 \begin{aligned}
@@ -248,10 +248,90 @@ $$
   \end{bmatrix}
 $$
 
+We know the intercept-only model produces the mean as the one predicted value, as the mean minimizes the sum of squared errors in the absence of any other covariates. We can check this using R - we'll first generate a vector $\mathbf{y}$ consisting of 5 realizations of a random variable, such that $\mathbf{Y} \sim \mathcal{N}(\mu = 0, \sigma^2 = 3)$. 
+
+```{r}
+y <- rnorm(5, mean = 0, sd = 3)
+y <- matrix(y, ncol = 1)
+y
+```
+
+The mean of $\mathbf{y}$ is:
+
+```{r}
+mean(y)
+```
+
+We can use R to fit an intercept-only model. We can see that the intercept coefficient $\beta_0$ is equal to the mean of $\mathbf{y}$. 
+
+```{r}
+null_mod <- lm(y ~ 1)
+coef(null_mod)
+```
+
+Lastly, let's use linear algebra to figure out why this is true. Once again, we know that the linear regression closed-form solution is given by the following: 
+
+$$
+\widehat{\boldsymbol{\beta}} = \left(\mathbf{X}^\prime \mathbf{X} \right)^{-1} \mathbf{X}^\prime \mathbf{y}
+$$
+
+Let's first define $\mathbf{X}$:
+
+```{r}
+X <- c(1, 1, 1, 1, 1)
+X <- matrix(X, ncol = 1)
+X
+```
+
+The value of $\mathbf{X}^\prime \mathbf{X}$ is given by the following - note that this is equal to our sample size $n = 5$. 
+
+```{r}
+t(X) %*% X
+```
+
+The inverse of which, $\left(\mathbf{X}^\prime \mathbf{X} \right)^{-1}$, is of course $n^{-1}$:
+
+```{r}
+solve(t(X) %*% X)
+```
+
+We multiply the above by $\mathbf{X}^\prime$ again to obtain $\left(\mathbf{X}^\prime \mathbf{X} \right)^{-1} \mathbf{X}^\prime$, which gives us a constant vector of length $n$ with all values being equal to $n^{-1}$:
+
+```{r}
+solve(t(X) %*% X) %*% t(X)
+```
+
+Lastly, we multiply the above by $\mathbf{y}$. Remember how multiplying vectors works - in this case we are multiplying each element of the above vector $\left(\mathbf{X}^\prime \mathbf{X} \right)^{-1} \mathbf{X}^\prime$ with each element of $\mathbf{y}$ and adding them together. We'll define $\mathbf{Z} = \left(\mathbf{X}^\prime \mathbf{X} \right)^{-1} \mathbf{X}^\prime$ for convenience of notation: 
+
+$$
+\mathbf{Z} \mathbf{y} = \sum_{i=1}^n \mathbf{Z}_i \mathbf{y}_i
+$$
+
+Since each element of $\mathbf{Z}$ is the same, $n^{-1}$, the above quantity is equivalent to:
+
+$$
+\begin{aligned}
+  \mathbf{Z} \mathbf{y} &= \left(\mathbf{X}^\prime \mathbf{X} \right)^{-1} \mathbf{X}^\prime \mathbf{y} \\
+  \mathbf{Z} \mathbf{y} &= \sum_{i=1}^n \mathbf{Z}_i \mathbf{y}_i \\
+  \mathbf{Z} \mathbf{y} &= n^{-1} \sum_{i=1}^n \mathbf{y}_i \\
+\end{aligned}
+$$
+
+This is simply the sum of all the element of $\mathbf{y}$ divided by $n$ - the mean! We can verify this with R by using linear algebra to compute the OLS solution:
+
+```{r}
+solve(t(X) %*% X) %*% t(X) %*% y
+```
+
+This is equal to simply taking the mean of $\mathbf{y}$: 
+
+```{r}
+mean(y)
+```
 
 # References 
 
-
+1. Faraway, J. [Extending the Linear Model with R, 2nd Edition](https://doi.org/10.1201/9781315382722). *Chapman and Hall*. 2016. 
 
 # Session Info 
 
