@@ -1,0 +1,54 @@
+---
+title: "scRNA-seq Resources"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    self-contained: true
+    fig-format: retina
+    df-print: kable
+    link-external-newwindow: true
+execute: 
+  cache: true
+  freeze: auto
+---
+
+# Purpose 
+
+Here I'll catalog useful papers, preprints, method vignettes, Twitter discussions, etc. that I've found helpful while learning how to process and analyze single cell RNA-seq data. When possible, I'll link to static versions of things in the hopes that links don't break. I'll categorize resources according to which problem they address e.g., raw data processing, clustering, visualization, etc., though some resources will of course touch on multiple topics.  
+
+# Processing Raw Reads 
+
+# Quality Control 
+
+# Normalization 
+
+# Integration 
+
+# Clustering 
+
+# Annotation 
+
+# Dimension Reduction & Visualization 
+
+# Trajectory Inference & RNA Velocity 
+
+# Differential Expression 
+
+# Pathway Analysis 
+
+# Simulation
+
+# Miscellaneous 
+
