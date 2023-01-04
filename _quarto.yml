@@ -24,6 +24,9 @@ website:
       - text: "Derivations"
         menu:
           - derivations/Intercept_Interpretation.qmd
+      - text: "Knowledge Base"
+        menu: 
+          - knowledge_base/scRNAseq.qmd
 
 format:
   html:

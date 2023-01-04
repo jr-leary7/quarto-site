@@ -1,0 +1,16 @@
+{
+  "hash": "25f8bcbb256e0d76ffdf004f11e1b8c0",
+  "result": {
+    "markdown": "---\ntitle: \"scRNA-seq Resources\"\nauthor:\n  name: Jack Leary\n  email: j.leary@ufl.edu\n  affiliations:\n    - name: University of Florida\n      department: Biostatistics \n      city: Gainesville\n      state: FL\ndate: \"2023-01-03\"\nformat:\n  html:\n    code-fold: show\n    code-copy: true\n    code-tools: true\n    toc: true\n    self-contained: true\n    fig-format: retina\n    df-print: kable\n    link-external-newwindow: true\nexecute: \n  cache: true\n  freeze: auto\n---\n\n\n# Purpose \n\nHere I'll catalog useful papers, preprints, method vignettes, Twitter discussions, etc. that I've found helpful while learning how to process and analyze single cell RNA-seq data. When possible, I'll link to static versions of things in the hopes that links don't break. I'll categorize resources according to which problem they address e.g., raw data processing, clustering, visualization, etc., though some resources will of course touch on multiple topics.  \n\n# Processing Raw Reads \n\n# Quality Control \n\n# Normalization \n\n# Integration \n\n# Clustering \n\n# Annotation \n\n# Dimension Reduction & Visualization \n\n# Trajectory Inference & RNA Velocity \n\n# Differential Expression \n\n# Pathway Analysis \n\n# Simulation\n\n# Miscellaneous \n\n",
+    "supporting": [
+      "scRNAseq_files"
+    ],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}
