@@ -15,7 +15,7 @@ format:
     code-copy: true
     code-tools: true
     toc: true
-    df-print: default
+    df-print: kable
     self-contained: true
     fig-format: retina
     link-external-newwindow: true
@@ -335,16 +335,16 @@ y
 The mean of $\mathbf{y}$ for each treatment group can be computed as follows. We're going to use a little `{dplyr}` code to perform the summarization, as I find it a little more readable & replicable than base R. This will necessitate creating a `data.frame` to hold our $\mathbf{y}$ and $\mathbf{X}$ variables. Note that we've switched back to the categorical representation of $\mathbf{X}$, as it's more interpretable than the indicator variable version for summaries such as this. 
 
 ```{r}
-cat_mod_df <- data.frame(X = X, y = y)
-cat_mod_df
+data.frame(X = X, y = y)
 ```
 
 Here's the mean for each group: 
 
 ```{r}
-cat_mod_df %>% 
-  group_by(X) %>% 
-  summarise(mu = mean(y))
+data.frame(X = X, y = y) %>% 
+  with_groups(X, 
+              summarise, 
+              mu = mean(y))
 ```
 
 Let's use the OLS formula to solve for $\boldsymbol{\beta} = [\beta_0, \beta_1]$. Note that we're once again using the design matrix version of $\mathbf{X}$ with the intercept column and indicator variable for group. We see that the intercept $\beta_0$ is equal to the mean of the **A** group - but the coefficient for the **B** group $\beta_1$ isn't! This is because $\beta_1$ doesn't have the same interpretation as $\beta_0$. While $\beta_0$ is equal to the mean of the reference group (i.e., the first level of the categorical variable, in our case group **A**), $\beta_1$ represents the difference between the mean for group **A** and the mean for group **B**. 
@@ -354,7 +354,7 @@ cat_mod_beta <- solve(t(X_2) %*% X_2) %*% t(X_2) %*% y
 cat_mod_beta
 ```
 
-This becomes easier to understand when we sum the coefficients and get the average for group **B**, which is `r library(dplyr); with_groups(cat_mod_df, X, summarise, mu = mean(y)) %>% filter(X == "B") %>% pull(mu)`. 
+This becomes easier to understand when we sum the coefficients and get the average for group **B**, which is `r library(dplyr); data.frame(X = X, y = y) %>% with_groups(X, summarise, mu = mean(y)) %>% filter(X == "B") %>% pull(mu)`. 
 
 ```{r}
 sum(cat_mod_beta)
@@ -411,7 +411,7 @@ data.frame(X = X[, 1], y = y[, 1]) %>%
 Using `{dplyr}`, we can find the mean of $\mathbf{y}$ when $\mathbf{X} = 0$. 
 
 ```{r}
-data.frame(X = X[, 1], y = y[, 1]) %>% 
+data.frame(X = X[, 1], y = y) %>% 
   filter(X == 0) %>% 
   summarise(mu = mean(y))
 ```
@@ -444,12 +444,20 @@ coef(cont_mod_centered)
 
 ### Standardizing Continuous Predictors 
 
-Standardizing (or scaling, as R calls it) can also occasionally be useful. Dividing by the standard deviation in addition to centering results in our continuous random variable having mean 0 and standard deviation 1. This does change the units of the variable though, which is important to remember. It does not, however, change the interpretation of the intercept - which remains unchanged from the model we fit above with only centering. The coefficient $\beta_1$ differs though, and now represents the change in $\mathbf{y}$ given a one standard deviation increase in $\mathbf{X}$. 
+Standardizing (or scaling, as R calls it) can also occasionally be useful. Dividing by the standard deviation in addition to centering results in our continuous random variable having mean 0 and standard deviation 1. This does change the units of the variable though, which is important to remember. It does not, however, change the interpretation of the intercept - which remains unchanged from the model we fit above with only centering. The coefficient $\beta_1$ differs though, and now represents the change in $\mathbf{y}$ given a one standard deviation increase in $\mathbf{X}$. For more on standardization see [this StatLect post](https://statlect.com/fundamentals-of-statistics/linear-regression-with-standardized-variables) and [this blog post from Columbia's Dr. Andrew Gelman](https://statmodeling.stat.columbia.edu/2009/07/11/when_to_standar/).
 
 ```{r}
 X_scaled <- scale(X)
 cont_mod_scaled <- lm(y ~ X_scaled)
 coef(cont_mod_scaled)
+```
+
+Lastly, with respect to standardization at least, it's important to note that if we standardize the response variable $\mathbf{y}$ in addition to standardizing the predictor matrix $\mathbf{X}$, the intercept will disappear i.e., it will become zero. This is because after standardization, the means of both the predictor and response variables are equal to zero. Since the intercept is the mean of the response when the predictor is zero, the intercept is also zero. Note that because of how integers work in computer memory the value of the intercept shown below isn't quite zero, but it is very close. For another example of this, see [this Stackoverflow post](https://stats.stackexchange.com/questions/43036/why-does-the-y-intercept-of-a-linear-model-disappear-when-i-standardize-variable). 
+
+```{r}
+y_scaled <- scale(y)
+cont_mod_resp_scaled <- lm(y_scaled ~ X_scaled)
+coef(cont_mod_resp_scaled)
 ```
 
 ## Models with Categorical & Continuous Predictors 
@@ -550,22 +558,117 @@ The mean of $\mathbf{y}$ is `r mean(y)`, and the log of that quantity is:
 log(mean(y))
 ```
 
-We can fit a Poisson GLM like so:
+We can fit a Poisson GLM like so. We can clearly see that $\beta_0 = \text{log}(\bar{\mathbf{y}})$. 
 
 ```{r}
 null_mod_pois <- glm(y ~ 1, family = poisson(link = "log"))
 coef(null_mod_pois)
 ```
 
-Thus, when we use the inverse of the link function (exponentiation) on the estimated value of $\beta_0$, we get the mean of $\mathbb{E}[\mathbf{y}] = `r mean(y)`$. 
+Thus, when we use the inverse of the link function (exponentiation) on the estimated value of $\beta_0$, we get the value of $\mathbb{E}[\mathbf{y}] = `r mean(y)`$. 
 
 ```{r}
 exp(coef(null_mod_pois))
 ```
 
-# Linear Mixed Model
+## Models with Categorical Predictors 
 
-# Generalized Linear Mixed Model
+The extension to categorical predictors is much the same as we saw before with ordinary linear models, with the primary change being that we're now working on the log scale. Let's add a categorical predictor to our model. First we simulate a categorical $\mathbf{X}$: 
+
+```{r}
+X <- sample(c("A", "B"), size = 10, replace = TRUE)
+X <- matrix(X, ncol = 1)
+X
+```
+
+Again using `{dplyr}`, we can find $\bar{\mathbf{y}}$ and $\text{log}(\bar{\mathbf{y}})$ for each group in our categorical variable:
+
+```{r}
+data.frame(y = y, 
+           X = X[, 1]) %>% 
+  with_groups(X, 
+              summarise, 
+              mu = mean(y), 
+              log_mu = log(mean(y)))
+```
+
+We fit a Poisson GLM using the `glm()` function, again using the natural log as our link function. We see that the intercept is equal to the log of the mean of our response variable for group **A**. 
+
+```{r}
+cat_mod_pois <- glm(y ~ X, family = poisson(link = "log"))
+coef(cat_mod_pois)
+```
+
+Next, if we sum the coefficients, we get the log of the response variable for group **B**:
+
+```{r}
+sum(coef(cat_mod_pois))
+```
+
+If we exponentiate the coefficients the intercept becomes simply the mean of $\mathbf{y}$ for group **A**. 
+
+```{r}
+exp(coef(cat_mod_pois))
+```
+
+Lastly, if we exponentiate the sum of the coefficients (the order of these operations is important), we get the mean of $\mathbf{y}$ for group **B**:
+
+```{r}
+exp(sum(coef(cat_mod_pois)))
+```
+
+## Models with Continuous Predictors 
+
+As with ordinary linear models, in the presence of a continuous predictor the intercept becomes the expected value of the response variable conditional on the line of best fit that we generate. First we generate another $\mathbf{y}$ with a larger sample size and a slightly lower value of $\lambda$. Then we generate Gamma random noise, and define the predictor $\mathbf{X} = 3.1y + \epsilon$. 
+
+```{r}
+y <- rpois(300, lambda = 3)
+y <- matrix(y, ncol = 1)
+X <- 3.1 * y + rgamma(300, shape = 20, rate = 4)
+X <- matrix(X, ncol = 1)
+```
+
+We can plot $\mathbf{X}$ and $\mathbf{y}$ to get an idea of what their relationship is. Since $\mathbf{X}$ is a Gamma random variable, it doesn't actually have any zero values; the minimum value we've generated is actually `r min(X[, 1])`. As such, the intercept will be an extrapolation of the data that we do have. 
+
+```{r}
+data.frame(y = y, 
+           X = X[, 1]) %>% 
+  ggplot(aes(x = X, y = y)) + 
+  geom_point(alpha = 0.8) + 
+  labs(x = "X", y = "Y") + 
+  theme_classic(base_size = 14)
+```
+
+We fit another Poisson GLM and check the coefficients. The intercept in this case is interpreted as the log of the expected value of the response when our predictor variable is equal to zero. However - since $\mathbf{X}$ is essentially a [Gamma random variable](https://en.wikipedia.org/wiki/Gamma_distribution), it can actually never take a value of zero, as its support is $(0, \infty)$. As such, the interpretation of $\beta_0$ is somewhat useless here, and thus it makes sense to center $\mathbf{X}$ as we did earlier with the ordinary linear model.   
+
+```{r}
+cont_mod_pois <- glm(y ~ X, family = poisson(link = "log"))
+coef(cont_mod_pois)
+```
+
+After centering and refitting the Poisson GLM, the intercept takes on a new interpretation - the log of $\mathbf{y}$ when $\mathbf{X}$ is at its mean. Note that the coefficient for $\mathbf{X}$ does not change, as centering does not change the units of $\mathbf{X}$. 
+
+```{r}
+X_cent <- scale(X, scale = FALSE)
+cont_mod_pois_centered <- glm(y ~ X_cent, family = poisson(link = "log"))
+coef(cont_mod_pois_centered)
+```
+
+Let's plot both the raw data and the fitted values obtained from our model. The blue horizontal line shows $\text{exp}(\beta_0)$ i.e., the expected value of $\mathbf{y}$ when $\mathbf{X}$ is at its mean value (again, conditional on the line of best fit that we obtained). The vertical yellow line shows where the mean of $\mathbf{X}$ is; since we centered $\mathbf{X}$ this is equal to zero. Lastly, the green line shows the predicted values from our model, and this line intersects nicely with the value of the intercept as we would expect.  
+
+```{r}
+intercept_exp <- exp(coef(cont_mod_pois_centered)[1])
+data.frame(y = y, 
+           y_pred = fitted(cont_mod_pois_centered), 
+           X = X_cent[, 1]) %>% 
+  ggplot(aes(x = X, y = y)) + 
+  geom_point(alpha = 0.8) + 
+  geom_hline(yintercept = intercept_exp, color = "dodgerblue", size = 1) + 
+  geom_vline(xintercept = 0, color = "goldenrod", size = 1) + 
+  geom_line(aes(y = y_pred), color = "forestgreen", size = 1) + 
+  labs(x = "X (centered)", y = "Y") + 
+  theme_classic()
+```
 
 # References 
 
