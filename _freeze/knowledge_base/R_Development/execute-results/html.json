@@ -1,0 +1,14 @@
+{
+  "hash": "592c403f19c2bced1956a86c0069827b",
+  "result": {
+    "markdown": "---\ntitle: \"R Development Resources\"\nauthor:\n  name: Jack Leary\n  email: j.leary@ufl.edu\n  affiliations:\n    - name: University of Florida\n      department: Biostatistics \n      city: Gainesville\n      state: FL\ndate: \"2023-01-10\"\nformat:\n  html:\n    code-fold: show\n    code-copy: true\n    code-tools: true\n    toc: true\n    self-contained: true\n    fig-format: retina\n    df-print: kable\n    link-external-newwindow: true\nexecute: \n  cache: true\n  freeze: auto\n---\n\n\n# Introduction \n\n# Package Development \n\n# Computational Efficiency \n\n# Reproducible Research \n\n# Development Best Practices \n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

@@ -68,11 +68,11 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
 
 # Dimension Reduction & Visualization 
 
-# Trajectory Inference & RNA Velocity 
+# Trajectory Inference
 
-## Pseudotime-based Tools
+## Via Pseudotime
 
-## RNA Velocity-based Tools 
+## Via RNA Velocity
 
 - [RNA velocity unravaled](https://doi.org/10.1371/journal.pcbi.1010492)
 
@@ -87,7 +87,13 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
 
 # Simulation
 
-# Computational Efficiency & Scalability 
+- [Enhancing biological signals and detection rates in single-cell RNA-seq experiments with cDNA library equalization ](https://doi.org/10.1093/nar/gkab1071)
+   - This paper details the `{scaffold}` simulation method & accompanying R package ([detailed vignette here](https://www.rhondabacher.com/scaffold-vignette.pdf)) built by my PhD adviser Dr. Rhonda Bacher. scRNA-seq data simulation can often be tricky, and most packages have weird defaults, don't generate data that follows true scRNA-seq count distributions, or are just really hard to set up & use. `{scaffold}` fixes all that, and allows the user to generate UMI or non-UMI data, as well as data containing multiple populations or dynamic trends over pseudotime. Ground truth cluster labels and cell temporal orderings are provided, which makes it a great choice when benchmarking new or extant methods. It's fairly simple to use, & computationally efficient as well which is a huge plus when running large simulation studies. 
+
+# Computational Reproducibility & Scalability 
+
+- [Reproducible pipelines in R using `{targets}`](https://docs.ropensci.org/targets/)
+  - The `{targets}` package is one of my favorite R tools, & the well-written docs above show how to create version-controlled pipelines entirely using R. This framework is an absolute godsend for large projects, simulation studies, etc., and I've used it on every longterm computational project I've worked on in the past 2 years. It makes tracking, reproducing, & parallelizing the execution of large codebases very easy, and makes reproducible research accessible to anyone with a good handle on R.  
 
 - [Parallelization in `Seurat` vignette](https://satijalab.org/seurat/articles/future_vignette.html)
   - Shows usage of the `future` R package to improve tasks such as normalization, integration, clustering, & differential expression. 

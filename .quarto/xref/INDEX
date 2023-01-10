@@ -13,5 +13,8 @@
   },
   "knowledge_base/scRNAseq.qmd": {
     "scRNAseq.html": "ec665d55"
+  },
+  "knowledge_base/R_Development.qmd": {
+    "R_Development.html": "3a39e9c9"
   }
 }
