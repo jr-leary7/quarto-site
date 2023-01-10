@@ -738,7 +738,7 @@ ggplot(mod_df, aes(x = treat, y = y, color = treat)) +
   theme_classic(base_size = 14)
 ```
 
-Let's fit a model. As previously noted, we use the log link function. Since our treatment variable has three categories, we now have two coefficients for each of the non-reference group levels. The intercept $\beta_0$ gives us the log of the expected value of the response for a patient that is 0 years old, has spent 0 months in treatment, and is assigned to be treated with **DrugA**. We can tell right away that this isn't the most useful interpretation, as there are no patients in our study who are zero years old (and even if there were, it probably wouldn't be that useful to know that quantity). 
+Let's fit a model. As previously noted, we use the log link function. Since our treatment variable has three categories, we now have two coefficients for each of the non-reference group levels. The intercept $\beta_0$ gives us the log of the expected value of the response for a patient that is 0 years old, has spent 0 months in treatment, and is assigned to be treated with **Drug_A**. We can tell right away that this isn't the most useful interpretation, as there are no patients in our study who are zero years old (and even if there were, it probably wouldn't be that useful to know that quantity). 
 
 ```{r}
 full_mod_pois <- glm(y ~ age + months + treat, 
@@ -764,7 +764,7 @@ full_mod_pois_centered <- glm(y ~ age_cent + months + treat,
 coef(full_mod_pois_centered)
 ```
 
-Exponentiating $\beta_0$ now gives us the expected value of $\mathbf{y}$ for a patient of average age (which is `r mean(mod_df$age)` years) who was assigned treatment **Drug)A** and has spent zero months being treated. This quantity is useful because it tells us the baseline pre-treatment value for the average patient who takes **Drug_A**. 
+Exponentiating $\beta_0$ now gives us the expected value of $\mathbf{y}$ for a patient of average age (which is `r mean(mod_df$age)` years) who was assigned treatment **Drug_A** and has spent zero months being treated. This quantity is useful because it tells us the baseline pre-treatment value for the average patient who takes **Drug_A**. 
 
 ```{r}
 exp(coef(full_mod_pois_centered))[1]
@@ -774,9 +774,9 @@ exp(coef(full_mod_pois_centered))[1]
 
 While regression intercepts can seem tricky at first and don't always carry a useful interpretation by default, I think they're more useful than introductory & intermediate statistics courses give them credit for. I understand those course's emphasis on interpreting estimates for covariates of interest of course, as those are what generally determine the success or failure of our scientific hypotheses, but the intercept can often help establish a useful baseline value against which you can compare your other estimates. 
 
-There's a couple important takeaways I'd like to re-emphasize. First - always make sure you know the reference group of your categorical variables, and set it to something more useful if you need to! The alphabetical order used by R is often not quite what you want. Second - keep centering (or even pseudo-centering around another useful value) in mind & use it often. There's many situations outside of just patient age where a value of 0 makes little sense in the context of your study. Lastly, when using GLMs, make sure you know your link function, its inverse, and how to interpret your coefficients on each scale. 
+There's a couple important takeaways I'd like to re-emphasize. **First** - always make sure you know the reference group of your categorical variables, and set it to something more useful if you need to! The alphabetical order used by R is often not quite what you want. **Second** - keep centering (or even pseudo-centering around another useful value) in mind & use it often. There's many situations outside of just patient age where a value of 0 makes little sense in the context of your study. **Lastly**, when using GLMs, make sure you know your link function, its inverse, and how to interpret your coefficients on each scale. 
 
-Finally, I've included some references below that have been helpful to me, and which I would recommend as further reading if you're interested in the technical details of regression & other methods. 
+Finally, I've included some references below that have been helpful to me, and which I would recommend as further reading if you're interested in the technical details of regression & other modeling methods. 
 
 # References 
 
