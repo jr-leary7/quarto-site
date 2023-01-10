@@ -1,5 +1,5 @@
 ---
-title: "IN PROGRESS - Interpreting Intercepts in Regression Models"
+title: "Understanding Intercepts in Linear Regression Models"
 author:
   name: Jack Leary
   email: j.leary@ufl.edu
@@ -15,9 +15,9 @@ format:
     code-copy: true
     code-tools: true
     toc: true
-    df-print: kable
     self-contained: true
     fig-format: retina
+    df-print: kable
     link-external-newwindow: true
 execute: 
   cache: true
@@ -670,11 +670,121 @@ data.frame(y = y,
   theme_classic()
 ```
 
+## Models with Categorical & Continuous Predictors 
+
+Lastly, we'll again examine the most common real-life situation - models with both categorical and continuous predictors. Consider a dataset where the response is a Poisson-distributed random variable, say the number of copies of viral RNA in a sample taken from a patient. First, let's say that our sample size is set to a generous $n = 1000$. Next, imagine that we have two continuous predictors; the first being patient age in years, and the second being the number of months that the patient has been in treatment. We'll simulate age as a Poisson random variable with a mean of 25 years, and months in treatment as a negative binomial random variable with a mean of 3 months and overdispersion parameter (denoted `size` in the `rnbinom()` function) of 4. Lastly, let's define a categorical predictor with 3 possible treatment categories. We store all 3 predictors in a `data.frame`. 
+
+```{r}
+X_age <- rpois(1000, 25)
+X_months <- rnbinom(1000, size = 4, mu = 3)
+X_treat <- sample(c("Drug_A", "Drug_B", "Drug_C"), 
+                  size = 1000, 
+                  replace = TRUE)
+mod_df <- data.frame(age = X_age, 
+                     months = X_months, 
+                     treat = X_treat)
+slice_head(mod_df, n = 5)
+```
+
+Finally, we'll define $\mathbf{y}$ to be a function of all 3 predictor variables along with a large amount of Poisson-distributed random noise following the distribution $\epsilon \sim \text{Poisson}(50)$. We use the handy `dplyr::case_when()` function to create $\mathbf{y}$ as a piecewise function whose relationship to the predictor variable changes based on the treatment each patient was given. After generating $\mathbf{y}$, we round it to ensure that it is integer-valued, since we're focused here on using Poisson GLMs. 
+
+```{r}
+epsilon <- rpois(1000, 50)
+mod_df <- mod_df %>% 
+          mutate(y = case_when(treat == "Drug_A" ~ 2.25 * age - 1.2 * months, 
+                               treat == "Drug_B" ~ 2 * age - 3 * months, 
+                               treat == "Drug_C" ~ 1.75 * age - 5 * months), 
+                 y = round(y + epsilon))
+slice_head(mod_df, n = 5)
+```
+
+We know that for our two continuous predictors, the intercept will indicate the predicted value of $\mathbf{y}$ for patients with values of zero for those two variables. Since we also have a categorical variable, the intercept will refer to the reference group of that variable - in this case patients who were assigned **Drug_A**. Lastly, since we're using a Poisson GLM, we know that the intercept will be the natural log of that quantity. Our model will be of the following form:
+
+$$
+\text{log}(\mathbb{E}[\text{Viral RNA}]) = \beta_0 + \beta_{\text{age}} + \beta_{\text{months}} + \beta_{\text{treat}} + \epsilon
+$$
+
+Let's visualize the data so that we can get some idea of what the relationships between our variables are, and what the intercept of the model we're going to fit will tell us. First let's look at the relationship between **age** and the response, splitting by treatment group. We add a purple vertical line showing where the overall mean of **age** is. 
+
+```{r}
+ggplot(mod_df, aes(x = age, y = y, color = treat)) + 
+  geom_vline(aes(xintercept = mean(age)), color = "purple", size = 1) + 
+  geom_point(alpha = 0.8) + 
+  labs(x = "Age", y = "Viral RNA", color = "Treatment") + 
+  theme_classic(base_size = 14)
+```
+
+We repeat the visualization for **months**. 
+
+```{r}
+ggplot(mod_df, aes(x = months, y = y, color = treat)) + 
+  geom_vline(aes(xintercept = mean(months)), color = "purple", size = 1) + 
+  geom_point(alpha = 0.8) + 
+  labs(x = "Months Treated", y = "Viral RNA", color = "Treatment") + 
+  theme_classic(base_size = 14)
+```
+
+Lastly, let's simply compare the distribution of the response between the three treatment groups using a beeswarm plot, which is a variation on the classic violin plot that I've preferred recently. Check out the [`ggbeeswarm` package docs]() for more. We also add a horizontal line showing $\bar{\mathbf{y}}$ for each group. 
+
+```{r}
+ggplot(mod_df, aes(x = treat, y = y, color = treat)) + 
+  ggbeeswarm::geom_quasirandom() + 
+  stat_summary(fun = "mean",
+               geom = "crossbar", 
+               width = 0.5,
+               size = 0.75, 
+               color = "black") + 
+  labs(x = "Treatment", y = "Viral RNA", color = "Treatment") + 
+  theme_classic(base_size = 14)
+```
+
+Let's fit a model. As previously noted, we use the log link function. Since our treatment variable has three categories, we now have two coefficients for each of the non-reference group levels. The intercept $\beta_0$ gives us the log of the expected value of the response for a patient that is 0 years old, has spent 0 months in treatment, and is assigned to be treated with **DrugA**. We can tell right away that this isn't the most useful interpretation, as there are no patients in our study who are zero years old (and even if there were, it probably wouldn't be that useful to know that quantity). 
+
+```{r}
+full_mod_pois <- glm(y ~ age + months + treat, 
+                     data = mod_df, 
+                     family = poisson(link = "log"))
+coef(full_mod_pois)
+```
+
+Since we're using the log-link, exponentiating the intercept gives us the expected value of $\mathbf{y}$ under the conditions we described just above. 
+
+```{r}
+exp(coef(full_mod_pois))[1]
+```
+
+Clearly, the **age** variable is a prime target for centering. While it could be useful to center **months** (depending on the goals of the study), there are a total of `r sum(mod_df$months == 0)` patients in the study who have spent zero months in treatment, so it's at least somewhat anchored in reality. We center **age**, then refit the model. We see that the estimate of $\beta_0$ changes, while none of the coefficients for our predictors do (as expected). 
+
+```{r}
+mod_df <- mutate(mod_df, 
+                 age_cent = scale(age, scale = FALSE))
+full_mod_pois_centered <- glm(y ~ age_cent + months + treat, 
+                              data = mod_df, 
+                              family = poisson(link = "log"))
+coef(full_mod_pois_centered)
+```
+
+Exponentiating $\beta_0$ now gives us the expected value of $\mathbf{y}$ for a patient of average age (which is `r mean(mod_df$age)` years) who was assigned treatment **Drug)A** and has spent zero months being treated. This quantity is useful because it tells us the baseline pre-treatment value for the average patient who takes **Drug_A**. 
+
+```{r}
+exp(coef(full_mod_pois_centered))[1]
+```
+
+# Conclusions 
+
+While regression intercepts can seem tricky at first and don't always carry a useful interpretation by default, I think they're more useful than introductory & intermediate statistics courses give them credit for. I understand those course's emphasis on interpreting estimates for covariates of interest of course, as those are what generally determine the success or failure of our scientific hypotheses, but the intercept can often help establish a useful baseline value against which you can compare your other estimates. 
+
+There's a couple important takeaways I'd like to re-emphasize. First - always make sure you know the reference group of your categorical variables, and set it to something more useful if you need to! The alphabetical order used by R is often not quite what you want. Second - keep centering (or even pseudo-centering around another useful value) in mind & use it often. There's many situations outside of just patient age where a value of 0 makes little sense in the context of your study. Lastly, when using GLMs, make sure you know your link function, its inverse, and how to interpret your coefficients on each scale. 
+
+Finally, I've included some references below that have been helpful to me, and which I would recommend as further reading if you're interested in the technical details of regression & other methods. 
+
 # References 
 
 1. Faraway, J. [Extending the Linear Model with R, 2nd Edition](https://doi.org/10.1201/9781315382722). *Chapman and Hall*. 2016. 
 
-2. Hastie, T. *et al*. [The Elements of Statistical Learning, 2nd Edition](https://doi.org/10.1007/b94608). *Springer*. 2009. 
+2. Hastie, T. *et al*. [The Elements of Statistical Learning, 2nd Edition](https://doi.org/10.1007/b94608). *Springer*. 2009.
+
+3. Wakefield, J. [Bayesian and Frequentist Regression Methods](https://doi.org/10.1007/978-1-4419-0925-1). *Springer*. 2016. 
 
 # Session Info 
 
