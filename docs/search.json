@@ -193,7 +193,7 @@
     "href": "knowledge_base/scRNAseq.html#via-pseudotime",
     "title": "scRNA-seq Resources",
     "section": "Via Pseudotime",
-    "text": "Via Pseudotime"
+    "text": "Via Pseudotime\n\nSlingshot: cell lineage and pseudotime inference for single-cell transcriptomics\nThe {slingshot} package is my currently preferred method for estimating a pseudotemporal cellular ordering. A decent vignette can be found here. I would absolutely recommend using principal components as input to the algorithm instead of UMAP / t-SNE components."
   },
   {
     "objectID": "knowledge_base/scRNAseq.html#via-rna-velocity",

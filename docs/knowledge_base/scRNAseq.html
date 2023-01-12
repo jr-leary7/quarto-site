@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Jack Leary">
-<meta name="dcterms.date" content="2023-01-10">
+<meta name="dcterms.date" content="2023-01-11">
 
 <title>Jack Leary - scRNA-seq Resources</title>
 <style>
@@ -4140,7 +4140,7 @@ vertical-align: -.125em;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">January 10, 2023</p>
+      <p class="date">January 11, 2023</p>
     </div>
   </div>
   
@@ -4209,9 +4209,21 @@ vertical-align: -.125em;
 </section>
 <section id="clustering" class="level1">
 <h1>Clustering</h1>
+<ul>
+<li><a href="https://doi.org/10.1101/2021.10.29.466448">Sub-Cluster Identification through Semi-Supervised Optimization of Rare-cell Silhouettes (SCISSORS) in Single-Cell Sequencing</a>
+<ul>
+<li>This is a bit of a self-plug, but I wrote the <code>{SCISSORS}</code> R package to make obtaining well-fit, reproducible clustering results using the graph-based algorithms in <code>{Seurat}</code> a little easier. The method loops over several combinations of clustering parameters and finds the set with the best silhouette score. Performance was validated via simulations, &amp; we were able to discover new biological tidbits in public datasets using the method. The <a href="https://github.com/jr-leary7/SCISSORS">GitHub repository</a> has several examples as well as the raw code, and there’s also <a href="https://jr-leary7.github.io/quarto-site/tutorials/SCISSORS_Reclustering.html">an introductory vignette</a> on this site.</li>
+</ul></li>
+</ul>
 </section>
 <section id="annotation" class="level1">
 <h1>Annotation</h1>
+<ul>
+<li><a href="https://doi.org/10.1038/s41590-018-0276-y">Reference-based analysis of lung single-cell sequencing reveals a transitional profibrotic macrophage</a>
+<ul>
+<li>This paper details the usage of an automated celltype annotation tool called <code>{SingleR}</code> to transfer labels from a labelled reference dataset to an unlabeled query dataset. A good vignette can be found <a href="https://www.bioconductor.org/packages/devel/bioc/vignettes/SingleR/inst/doc/SingleR.html">here</a>. If your data are clean &amp; well-processed, and your reference is high quality, it can be a fairly accurate &amp; very efficient tool. I generally use it as a first step in an annotation process to generate broad celltype labels e.g., monocyte, T cell, fibroblast, etc. Don’t treat its labels as ground truth, and definitely try multiple reference datasets. In addition, it uses correlation to measure the similarity between the query &amp; reference, &amp; I’ve found that processing both datasets using the same pipeline (especially with respect to normalization) has led to better results.</li>
+</ul></li>
+</ul>
 </section>
 <section id="dimension-reduction-visualization" class="level1">
 <h1>Dimension Reduction &amp; Visualization</h1>
@@ -4220,6 +4232,10 @@ vertical-align: -.125em;
 <h1>Trajectory Inference</h1>
 <section id="via-pseudotime" class="level2">
 <h2 class="anchored" data-anchor-id="via-pseudotime">Via Pseudotime</h2>
+<ul>
+<li><a href="https://doi.org/10.1186/s12864-018-4772-0">Slingshot: cell lineage and pseudotime inference for single-cell transcriptomics</a></li>
+<li>The <code>{slingshot}</code> package is my currently preferred method for estimating a pseudotemporal cellular ordering. A decent vignette can be found <a href="https://bioconductor.org/packages/release/bioc/vignettes/slingshot/inst/doc/vignette.html">here</a>. I would absolutely recommend using principal components as input to the algorithm instead of UMAP / t-SNE components.</li>
+</ul>
 </section>
 <section id="via-rna-velocity" class="level2">
 <h2 class="anchored" data-anchor-id="via-rna-velocity">Via RNA Velocity</h2>
@@ -4651,41 +4667,49 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 <span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a><span class="fu"># Clustering </span></span>
 <span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a><span class="fu"># Annotation </span></span>
-<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a><span class="fu"># Dimension Reduction &amp; Visualization </span></span>
-<span id="cb1-70"><a href="#cb1-70" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-71"><a href="#cb1-71" aria-hidden="true" tabindex="-1"></a><span class="fu"># Trajectory Inference</span></span>
-<span id="cb1-72"><a href="#cb1-72" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-73"><a href="#cb1-73" aria-hidden="true" tabindex="-1"></a><span class="fu">## Via Pseudotime</span></span>
+<span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Sub-Cluster Identification through Semi-Supervised Optimization of Rare-cell Silhouettes (SCISSORS) in Single-Cell Sequencing</span><span class="co">](https://doi.org/10.1101/2021.10.29.466448)</span></span>
+<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>This is a bit of a self-plug, but I wrote the <span class="in">`{SCISSORS}`</span> R package to make obtaining well-fit, reproducible clustering results using the graph-based algorithms in <span class="in">`{Seurat}`</span> a little easier. The method loops over several combinations of clustering parameters and finds the set with the best silhouette score. Performance was validated via simulations, &amp; we were able to discover new biological tidbits in public datasets using the method. The <span class="co">[</span><span class="ot">GitHub repository</span><span class="co">](https://github.com/jr-leary7/SCISSORS)</span> has several examples as well as the raw code, and there&#39;s also <span class="co">[</span><span class="ot">an introductory vignette</span><span class="co">](https://jr-leary7.github.io/quarto-site/tutorials/SCISSORS_Reclustering.html)</span> on this site. </span>
+<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-70"><a href="#cb1-70" aria-hidden="true" tabindex="-1"></a><span class="fu"># Annotation </span></span>
+<span id="cb1-71"><a href="#cb1-71" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-72"><a href="#cb1-72" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Reference-based analysis of lung single-cell sequencing reveals a transitional profibrotic macrophage</span><span class="co">](https://doi.org/10.1038/s41590-018-0276-y)</span></span>
+<span id="cb1-73"><a href="#cb1-73" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>This paper details the usage of an automated celltype annotation tool called <span class="in">`{SingleR}`</span> to transfer labels from a labelled reference dataset to an unlabeled query dataset. A good vignette can be found <span class="co">[</span><span class="ot">here</span><span class="co">](https://www.bioconductor.org/packages/devel/bioc/vignettes/SingleR/inst/doc/SingleR.html)</span>. If your data are clean &amp; well-processed, and your reference is high quality, it can be a fairly accurate &amp; very efficient tool. I generally use it as a first step in an annotation process to generate broad celltype labels e.g., monocyte, T cell, fibroblast, etc. Don&#39;t treat its labels as ground truth, and definitely try multiple reference datasets. In addition, it uses correlation to measure the similarity between the query &amp; reference, &amp; I&#39;ve found that processing both datasets using the same pipeline (especially with respect to normalization) has led to better results. </span>
 <span id="cb1-74"><a href="#cb1-74" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-75"><a href="#cb1-75" aria-hidden="true" tabindex="-1"></a><span class="fu">## Via RNA Velocity</span></span>
+<span id="cb1-75"><a href="#cb1-75" aria-hidden="true" tabindex="-1"></a><span class="fu"># Dimension Reduction &amp; Visualization </span></span>
 <span id="cb1-76"><a href="#cb1-76" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-77"><a href="#cb1-77" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">RNA velocity unravaled</span><span class="co">](https://doi.org/10.1371/journal.pcbi.1010492)</span></span>
+<span id="cb1-77"><a href="#cb1-77" aria-hidden="true" tabindex="-1"></a><span class="fu"># Trajectory Inference</span></span>
 <span id="cb1-78"><a href="#cb1-78" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-79"><a href="#cb1-79" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">On the mathematics of RNA velocity I: Theoretical analysis</span><span class="co">](https://doi.org/10.4208/csiam-am.SO-2020-0001)</span></span>
-<span id="cb1-80"><a href="#cb1-80" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-81"><a href="#cb1-81" aria-hidden="true" tabindex="-1"></a><span class="fu"># Differential Expression </span></span>
+<span id="cb1-79"><a href="#cb1-79" aria-hidden="true" tabindex="-1"></a><span class="fu">## Via Pseudotime</span></span>
+<span id="cb1-80"><a href="#cb1-80" aria-hidden="true" tabindex="-1"></a><span class="ss"> - </span><span class="co">[</span><span class="ot">Slingshot: cell lineage and pseudotime inference for single-cell transcriptomics</span><span class="co">](https://doi.org/10.1186/s12864-018-4772-0)</span></span>
+<span id="cb1-81"><a href="#cb1-81" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>The <span class="in">`{slingshot}`</span> package is my currently preferred method for estimating a pseudotemporal cellular ordering. A decent vignette can be found <span class="co">[</span><span class="ot">here</span><span class="co">](https://bioconductor.org/packages/release/bioc/vignettes/slingshot/inst/doc/vignette.html)</span>. I would absolutely recommend using principal components as input to the algorithm instead of UMAP / t-SNE components.   </span>
 <span id="cb1-82"><a href="#cb1-82" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-83"><a href="#cb1-83" aria-hidden="true" tabindex="-1"></a><span class="fu"># Pathway Analysis </span></span>
+<span id="cb1-83"><a href="#cb1-83" aria-hidden="true" tabindex="-1"></a><span class="fu">## Via RNA Velocity</span></span>
 <span id="cb1-84"><a href="#cb1-84" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-85"><a href="#cb1-85" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Variance-adjusted Mahalanobis (VAM): a fast and accurate method for cell-specific gene set scoring</span><span class="co">](https://doi.org/10.1093/nar/gkaa582)</span></span>
-<span id="cb1-86"><a href="#cb1-86" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span><span class="in">`VAM`</span> is an easy-to-use method for assigning each cell in a sample a score bounded on $<span class="co">[</span><span class="ot">0, 1</span><span class="co">]</span>$ for a user-provided gene set of interest. It&#39;s conveniently wrapped around the <span class="in">`Seurat`</span> framework, and I&#39;ve found it to be accurate &amp; useful in my single cell work. In addition, the author was very helpful when I reached out to him with some questions when I was first starting out. Vignettes can be found <span class="co">[</span><span class="ot">here</span><span class="co">](https://hrfrost.host.dartmouth.edu/VAM/)</span>. </span>
-<span id="cb1-87"><a href="#cb1-87" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-88"><a href="#cb1-88" aria-hidden="true" tabindex="-1"></a><span class="fu"># Simulation</span></span>
-<span id="cb1-89"><a href="#cb1-89" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-90"><a href="#cb1-90" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Enhancing biological signals and detection rates in single-cell RNA-seq experiments with cDNA library equalization </span><span class="co">](https://doi.org/10.1093/nar/gkab1071)</span></span>
-<span id="cb1-91"><a href="#cb1-91" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>This paper details the <span class="in">`{scaffold}`</span> simulation method &amp; accompanying R package (<span class="co">[</span><span class="ot">detailed vignette here</span><span class="co">](https://www.rhondabacher.com/scaffold-vignette.pdf)</span>) built by my PhD adviser Dr. Rhonda Bacher. scRNA-seq data simulation can often be tricky, and most packages have weird defaults, don&#39;t generate data that follows true scRNA-seq count distributions, or are just really hard to set up &amp; use. <span class="in">`{scaffold}`</span> fixes all that, and allows the user to generate UMI or non-UMI data, as well as data containing multiple populations or dynamic trends over pseudotime. Ground truth cluster labels and cell temporal orderings are provided, which makes it a great choice when benchmarking new or extant methods. It&#39;s fairly simple to use, &amp; computationally efficient as well which is a huge plus when running large simulation studies. </span>
+<span id="cb1-85"><a href="#cb1-85" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">RNA velocity unravaled</span><span class="co">](https://doi.org/10.1371/journal.pcbi.1010492)</span></span>
+<span id="cb1-86"><a href="#cb1-86" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-87"><a href="#cb1-87" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">On the mathematics of RNA velocity I: Theoretical analysis</span><span class="co">](https://doi.org/10.4208/csiam-am.SO-2020-0001)</span></span>
+<span id="cb1-88"><a href="#cb1-88" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-89"><a href="#cb1-89" aria-hidden="true" tabindex="-1"></a><span class="fu"># Differential Expression </span></span>
+<span id="cb1-90"><a href="#cb1-90" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-91"><a href="#cb1-91" aria-hidden="true" tabindex="-1"></a><span class="fu"># Pathway Analysis </span></span>
 <span id="cb1-92"><a href="#cb1-92" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-93"><a href="#cb1-93" aria-hidden="true" tabindex="-1"></a><span class="fu"># Computational Reproducibility &amp; Scalability </span></span>
-<span id="cb1-94"><a href="#cb1-94" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-95"><a href="#cb1-95" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Reproducible pipelines in R using `{targets}`</span><span class="co">](https://docs.ropensci.org/targets/)</span></span>
-<span id="cb1-96"><a href="#cb1-96" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>The <span class="in">`{targets}`</span> package is one of my favorite R tools, &amp; the well-written docs above show how to create version-controlled pipelines entirely using R. This framework is an absolute godsend for large projects, simulation studies, etc., and I&#39;ve used it on every longterm computational project I&#39;ve worked on in the past 2 years. It makes tracking, reproducing, &amp; parallelizing the execution of large codebases very easy, and makes reproducible research accessible to anyone with a good handle on R.  </span>
+<span id="cb1-93"><a href="#cb1-93" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Variance-adjusted Mahalanobis (VAM): a fast and accurate method for cell-specific gene set scoring</span><span class="co">](https://doi.org/10.1093/nar/gkaa582)</span></span>
+<span id="cb1-94"><a href="#cb1-94" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span><span class="in">`VAM`</span> is an easy-to-use method for assigning each cell in a sample a score bounded on $<span class="co">[</span><span class="ot">0, 1</span><span class="co">]</span>$ for a user-provided gene set of interest. It&#39;s conveniently wrapped around the <span class="in">`Seurat`</span> framework, and I&#39;ve found it to be accurate &amp; useful in my single cell work. In addition, the author was very helpful when I reached out to him with some questions when I was first starting out. Vignettes can be found <span class="co">[</span><span class="ot">here</span><span class="co">](https://hrfrost.host.dartmouth.edu/VAM/)</span>. </span>
+<span id="cb1-95"><a href="#cb1-95" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-96"><a href="#cb1-96" aria-hidden="true" tabindex="-1"></a><span class="fu"># Simulation</span></span>
 <span id="cb1-97"><a href="#cb1-97" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-98"><a href="#cb1-98" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Parallelization in `Seurat` vignette</span><span class="co">](https://satijalab.org/seurat/articles/future_vignette.html)</span></span>
-<span id="cb1-99"><a href="#cb1-99" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>Shows usage of the <span class="in">`future`</span> R package to improve tasks such as normalization, integration, clustering, &amp; differential expression. </span>
+<span id="cb1-98"><a href="#cb1-98" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Enhancing biological signals and detection rates in single-cell RNA-seq experiments with cDNA library equalization </span><span class="co">](https://doi.org/10.1093/nar/gkab1071)</span></span>
+<span id="cb1-99"><a href="#cb1-99" aria-hidden="true" tabindex="-1"></a><span class="ss">   - </span>This paper details the <span class="in">`{scaffold}`</span> simulation method &amp; accompanying R package (<span class="co">[</span><span class="ot">detailed vignette here</span><span class="co">](https://www.rhondabacher.com/scaffold-vignette.pdf)</span>) built by my PhD adviser Dr. Rhonda Bacher. scRNA-seq data simulation can often be tricky, and most packages have weird defaults, don&#39;t generate data that follows true scRNA-seq count distributions, or are just really hard to set up &amp; use. <span class="in">`{scaffold}`</span> fixes all that, and allows the user to generate UMI or non-UMI data, as well as data containing multiple populations or dynamic trends over pseudotime. Ground truth cluster labels and cell temporal orderings are provided, which makes it a great choice when benchmarking new or extant methods. It&#39;s fairly simple to use, &amp; computationally efficient as well which is a huge plus when running large simulation studies. </span>
 <span id="cb1-100"><a href="#cb1-100" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-101"><a href="#cb1-101" aria-hidden="true" tabindex="-1"></a><span class="fu"># Miscellaneous </span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb1-101"><a href="#cb1-101" aria-hidden="true" tabindex="-1"></a><span class="fu"># Computational Reproducibility &amp; Scalability </span></span>
+<span id="cb1-102"><a href="#cb1-102" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-103"><a href="#cb1-103" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Reproducible pipelines in R using `{targets}`</span><span class="co">](https://docs.ropensci.org/targets/)</span></span>
+<span id="cb1-104"><a href="#cb1-104" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>The <span class="in">`{targets}`</span> package is one of my favorite R tools, &amp; the well-written docs above show how to create version-controlled pipelines entirely using R. This framework is an absolute godsend for large projects, simulation studies, etc., and I&#39;ve used it on every longterm computational project I&#39;ve worked on in the past 2 years. It makes tracking, reproducing, &amp; parallelizing the execution of large codebases very easy, and makes reproducible research accessible to anyone with a good handle on R.  </span>
+<span id="cb1-105"><a href="#cb1-105" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-106"><a href="#cb1-106" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">Parallelization in `Seurat` vignette</span><span class="co">](https://satijalab.org/seurat/articles/future_vignette.html)</span></span>
+<span id="cb1-107"><a href="#cb1-107" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>Shows usage of the <span class="in">`future`</span> R package to improve tasks such as normalization, integration, clustering, &amp; differential expression. </span>
+<span id="cb1-108"><a href="#cb1-108" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-109"><a href="#cb1-109" aria-hidden="true" tabindex="-1"></a><span class="fu"># Miscellaneous </span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div></div></div></div></div>
 </div> <!-- /content -->
 

@@ -64,13 +64,21 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
 
 # Clustering 
 
+- [Sub-Cluster Identification through Semi-Supervised Optimization of Rare-cell Silhouettes (SCISSORS) in Single-Cell Sequencing](https://doi.org/10.1101/2021.10.29.466448)
+  - This is a bit of a self-plug, but I wrote the `{SCISSORS}` R package to make obtaining well-fit, reproducible clustering results using the graph-based algorithms in `{Seurat}` a little easier. The method loops over several combinations of clustering parameters and finds the set with the best silhouette score. Performance was validated via simulations, & we were able to discover new biological tidbits in public datasets using the method. The [GitHub repository](https://github.com/jr-leary7/SCISSORS) has several examples as well as the raw code, and there's also [an introductory vignette](https://jr-leary7.github.io/quarto-site/tutorials/SCISSORS_Reclustering.html) on this site. 
+
 # Annotation 
+
+- [Reference-based analysis of lung single-cell sequencing reveals a transitional profibrotic macrophage](https://doi.org/10.1038/s41590-018-0276-y)
+  - This paper details the usage of an automated celltype annotation tool called `{SingleR}` to transfer labels from a labelled reference dataset to an unlabeled query dataset. A good vignette can be found [here](https://www.bioconductor.org/packages/devel/bioc/vignettes/SingleR/inst/doc/SingleR.html). If your data are clean & well-processed, and your reference is high quality, it can be a fairly accurate & very efficient tool. I generally use it as a first step in an annotation process to generate broad celltype labels e.g., monocyte, T cell, fibroblast, etc. Don't treat its labels as ground truth, and definitely try multiple reference datasets. In addition, it uses correlation to measure the similarity between the query & reference, & I've found that processing both datasets using the same pipeline (especially with respect to normalization) has led to better results. 
 
 # Dimension Reduction & Visualization 
 
 # Trajectory Inference
 
 ## Via Pseudotime
+ - [Slingshot: cell lineage and pseudotime inference for single-cell transcriptomics](https://doi.org/10.1186/s12864-018-4772-0)
+  - The `{slingshot}` package is my currently preferred method for estimating a pseudotemporal cellular ordering. A decent vignette can be found [here](https://bioconductor.org/packages/release/bioc/vignettes/slingshot/inst/doc/vignette.html). I would absolutely recommend using principal components as input to the algorithm instead of UMAP / t-SNE components.   
 
 ## Via RNA Velocity
 
