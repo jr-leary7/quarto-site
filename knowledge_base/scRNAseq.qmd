@@ -79,6 +79,9 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
 ## Via Pseudotime
  - [Slingshot: cell lineage and pseudotime inference for single-cell transcriptomics](https://doi.org/10.1186/s12864-018-4772-0)
   - The `{slingshot}` package is my currently preferred method for estimating a pseudotemporal cellular ordering. A decent vignette can be found [here](https://bioconductor.org/packages/release/bioc/vignettes/slingshot/inst/doc/vignette.html). I would absolutely recommend using principal components as input to the algorithm instead of UMAP / t-SNE components.   
+  
+- [Trajectory-based differential expression analysis for single-cell sequencing data](https://doi.org/10.1038/s41467-020-14766-3)
+  - This paper describes the development of the `{tradeSeq}` R package, which uses generalized additive models (GAMs) to perform differential expression over an inferred cellular trajectory. The package has some limitations, but provides a variety of different tests of different patterns of gene expression, and overall strikes a good balance between running quickly & providing accurate results. A good vignette can be accessed [here](https://statomics.github.io/tradeSeq/articles/tradeSeq.html). A nice characteristic of the method is that it is agnostic with respect to the type of pseudotime estimation used, meaning the user can derive their cellular ordering using any pseudotime or RNA velocity method prior to running `{tradeSeq}`.  
 
 ## Via RNA Velocity
 
@@ -108,3 +111,5 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
 
 # Miscellaneous 
 
+- [Dr. Ming (Tommy) Tang's genomics tools GitHub repository](https://github.com/crazyhottommy/getting-started-with-genomics-tools-and-resources)
+  - [Dr. Ming Tang](https://twitter.com/tangming2005) is a wet lab scientist-turned-computational biologist who used to work at Dana Farber Cancer Institute & now is a director at Immunitas. He's put together a *ton* of resources for anyone (biologists, bioinformatics newbies, even experienced computational biologists) who's in the process of learning more about bioinformatics & biostatistics. This repository contains a ton of useful resources (books, blog posts, online courses, etc.) on statistics, computing, biology, and other topics. I'd recommend perusing it even if you're not a beginner, as you'll likely find something interesting or useful to read. 
