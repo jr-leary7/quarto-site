@@ -27,6 +27,7 @@ website:
       - text: "Knowledge Base"
         menu: 
           - knowledge_base/scRNAseq.qmd
+          - knowledge_base/R_Development.qmd
 
 format:
   html:
