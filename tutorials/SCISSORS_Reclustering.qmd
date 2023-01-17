@@ -1,5 +1,5 @@
 ---
-title: "scRNA-seq Reclustering with `SCISSORS`"
+title: "scRNA-seq Reclustering with `{SCISSORS}`"
 author:
   name: Jack Leary
   email: j.leary@ufl.edu

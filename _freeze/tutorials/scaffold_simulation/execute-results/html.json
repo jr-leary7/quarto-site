@@ -1,0 +1,14 @@
+{
+  "hash": "fb3e562b1c1ff9b2abac52da111cfe42",
+  "result": {
+    "markdown": "---\ntitle: \"Simulating scRNA-seq Data with `{scaffold}`\"\nauthor:\n  name: Jack Leary\n  email: j.leary@ufl.edu\n  affiliations:\n    - name: University of Florida\n      department: Biostatistics \n      city: Gainesville\n      state: FL\ndate: \"2023-01-16\"\nformat:\n  html:\n    code-fold: show\n    code-copy: true\n    code-tools: true\n    toc: true\n    self-contained: true\n    fig-format: retina\n    df-print: kable\n    link-external-newwindow: true\nexecute: \n  cache: true\n  freeze: auto\n---\n\n\n# Introduction \n\n# Libraries \n\n# Data \n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {},
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

@@ -77,7 +77,7 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
 # Trajectory Inference
 
 ## Via Pseudotime
- - [Slingshot: cell lineage and pseudotime inference for single-cell transcriptomics](https://doi.org/10.1186/s12864-018-4772-0)
+- [Slingshot: cell lineage and pseudotime inference for single-cell transcriptomics](https://doi.org/10.1186/s12864-018-4772-0)
   - The `{slingshot}` package is my currently preferred method for estimating a pseudotemporal cellular ordering. A decent vignette can be found [here](https://bioconductor.org/packages/release/bioc/vignettes/slingshot/inst/doc/vignette.html). I would absolutely recommend using principal components as input to the algorithm instead of UMAP / t-SNE components.   
   
 - [Trajectory-based differential expression analysis for single-cell sequencing data](https://doi.org/10.1038/s41467-020-14766-3)
