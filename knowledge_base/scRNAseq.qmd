@@ -15,7 +15,7 @@ format:
     code-copy: true
     code-tools: true
     toc: true
-    self-contained: true
+    embed-resources: true
     fig-format: retina
     df-print: kable
     link-external-newwindow: true
@@ -64,6 +64,9 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
 
 # Clustering 
 
+- [From Louvain to Leiden: guaranteeing well-connected communities](https://doi.org/10.1038/s41598-019-41695-z)
+  - Most scRNA-seq analysis packages apply some type graph-based clustering algorithms as the clustering method of choice. While [many other clustering methods exist](https://en.wikipedia.org/wiki/Category:Cluster_analysis_algorithms), graph-based methods are easy to use & interpret, computationally efficient, & their assumptions generally match the structure of scRNA-seq data. The Leiden algorithm described in the paper above is one of the most widely-used options; a good tutorial on using it via in Python `scanpy` can be found [here](https://nbisweden.github.io/workshop-scRNAseq/labs/compiled/scanpy/scanpy_04_clustering.html), and one for R using `{Seurat}` is [here](https://cran.r-project.org/web/packages/leiden/vignettes/run_leiden.html). 
+
 - [Sub-Cluster Identification through Semi-Supervised Optimization of Rare-cell Silhouettes (SCISSORS) in Single-Cell Sequencing](https://doi.org/10.1101/2021.10.29.466448)
   - This is a bit of a self-plug, but I wrote the `{SCISSORS}` R package to make obtaining well-fit, reproducible clustering results using the graph-based algorithms in `{Seurat}` a little easier. The method loops over several combinations of clustering parameters and finds the set with the best silhouette score. Performance was validated via simulations, & we were able to discover new biological tidbits in public datasets using the method. The [GitHub repository](https://github.com/jr-leary7/SCISSORS) has several examples as well as the raw code, and there's also [an introductory vignette](https://jr-leary7.github.io/quarto-site/tutorials/SCISSORS_Reclustering.html) on this site. 
 
@@ -100,6 +103,9 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
 
 - [Enhancing biological signals and detection rates in single-cell RNA-seq experiments with cDNA library equalization ](https://doi.org/10.1093/nar/gkab1071)
    - This paper details the `{scaffold}` simulation method & accompanying R package ([detailed vignette here](https://www.rhondabacher.com/scaffold-vignette.pdf)) built by my PhD adviser Dr. Rhonda Bacher. scRNA-seq data simulation can often be tricky, and most packages have weird defaults, don't generate data that follows true scRNA-seq count distributions, or are just really hard to set up & use. `{scaffold}` fixes all that, and allows the user to generate UMI or non-UMI data, as well as data containing multiple populations or dynamic trends over pseudotime. Ground truth cluster labels and cell temporal orderings are provided, which makes it a great choice when benchmarking new or extant methods. It's fairly simple to use, & computationally efficient as well which is a huge plus when running large simulation studies. 
+   
+- [Splatter: simulation of single-cell RNA sequencing data](https://doi.org/10.1186/s13059-017-1305-0)
+  - `{Splatter}` is another R package that implements relatively simple simulation of scRNA-seq counts data. While the package works well & has decent documentation, and gives good ground-truth values for gene differential expression & cell pseudotime, the counts it generates are less sparse than true single cell data typically are. This could lead to overly-optimistic method benchmarks if not accounted for when testing new methods. With that caveat, it's a good method & a great way to jump into simulation studies. A nice introductory vignette can be found [here](http://oshlacklab.com/splatter/articles/splatter.html). 
 
 # Computational Reproducibility & Scalability 
 

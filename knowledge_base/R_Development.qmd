@@ -15,7 +15,7 @@ format:
     code-copy: true
     code-tools: true
     toc: true
-    self-contained: true
+    embed-resources: true
     fig-format: retina
     df-print: kable
     link-external-newwindow: true
@@ -67,3 +67,6 @@ This document houses a list of resources I've put together that have helped me i
 
 - [The R Inferno](https://www.burns-stat.com/pages/Tutor/R_inferno.pdf)
   - This amusingly-titled & engagingly-written book covers a variety of oddities & frustrating idiosyncrasies that R has, many of which are holdovers from when R was being first developed. If you're having an annoyingly difficult low-level problem, this book might have the answer. 
+
+- [`radian`: an improved R console](https://github.com/randy3k/radian)
+  - If you often use R in the terminal, it can be a frustrating experience when compared to all the features (syntax highlighting, autocomplete, bracket-matching, etc.) that RStudio has. `radian` is a command line tool that adds all these aesthetic features to your R console. Simply install the Python-based library, then start calling `radian` instead of `R` when using R from the terminal. 
