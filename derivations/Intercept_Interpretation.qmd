@@ -15,7 +15,7 @@ format:
     code-copy: true
     code-tools: true
     toc: true
-    self-contained: true
+    embed-resources: true
     fig-format: retina
     df-print: kable
     link-external-newwindow: true

@@ -15,7 +15,7 @@ format:
     code-copy: true
     code-tools: true
     toc: true
-    self-contained: true
+    embed-resources: true
     fig-format: retina
     df-print: kable
     link-external-newwindow: true
@@ -35,6 +35,9 @@ This document houses a list of resources I've put together that have helped me i
 
 - [The `{usethis}` package](https://usethis.r-lib.org)
   - This R package removes a lot of headaches from setting up a new R package or other project. It contains functions to [create a new R package](https://usethis.r-lib.org/reference/create_package.html), [set up continuous integration (CI) tools](https://usethis.r-lib.org/reference/index.html#continuous-integration), [connect your package to a GitHub repository](https://usethis.r-lib.org/reference/use_github.html), and much more. Essentially, it removes a lot of the point-and-click steps that used to be necessary to set up an R package & get it version-controlled, and generally just makes development a lot easier. 
+  
+- [Writing R Extensions](https://colinfay.me/writing-r-extensions/index.html)
+  - This book, written by the R Core Team, is a lower-level guide to creating R packages, writing R documentation, debugging, linking R with C / C++, and other advanced topics. It's useful if you're getting deeper into package development & already have a very solid handle on the basics. 
 
 # Computational Efficiency 
 
@@ -48,6 +51,12 @@ This document houses a list of resources I've put together that have helped me i
 
 - [Reproducible pipelines in R using `{targets}`](https://docs.ropensci.org/targets/)
   - The `{targets}` package is one of my favorite R tools, & the well-written docs above show how to create version-controlled pipelines entirely using R. This framework is an absolute godsend for large projects, simulation studies, etc., and I've used it on every longterm computational project I've worked on in the past 2 years. It makes tracking, reproducing, & parallelizing the execution of large codebases very easy, and makes reproducible research accessible to anyone with a good handle on R.  
+  
+- [Scientific writing via `quarto`](https://quarto.org/docs/get-started/authoring/rstudio.html)
+  - `quarto` is a more fully-featured successor to [RMarkdown](https://bookdown.org/yihui/bookdown/), and enables the user to combine code, Markdown-formatted text, images, equations, etc. in a single document. Citations via supported as well, which makes technical writing relatively easy. There is support for LaTeX, which is great for homework assignments, proofs, and Methods sections. In addition, you can use `quarto` to create websites, books, presentations, and more. This site itself is actually run using `quarto`. I'd highly recommend it over RMarkdown at this point, both for its breadth of features & its expanded support of languages (Python, Julia, R, etc.) & IDEs (RStudio, VS Code, Jupyter notebooks). Full documentation can be found [here](https://quarto.org/docs/reference/). 
+  
+- [How to control stochasticity when processing in parallel](https://s3.amazonaws.com/assets.datacamp.com/production/course_6245/slides/chapter4.pdf)
+  - This presentation describes how to produce reproducible random number streams when using one of R's several parallel processing frameworks. It's pretty applied (not theoretical), and several useful code examples are shown. 
 
 # Development Best Practices
 
@@ -58,3 +67,6 @@ This document houses a list of resources I've put together that have helped me i
 
 - [The R Inferno](https://www.burns-stat.com/pages/Tutor/R_inferno.pdf)
   - This amusingly-titled & engagingly-written book covers a variety of oddities & frustrating idiosyncrasies that R has, many of which are holdovers from when R was being first developed. If you're having an annoyingly difficult low-level problem, this book might have the answer. 
+
+- [`radian`: an improved R console](https://github.com/randy3k/radian)
+  - If you often use R in the terminal, it can be a frustrating experience when compared to all the features (syntax highlighting, autocomplete, bracket-matching, etc.) that RStudio has. `radian` is a command line tool that adds all these aesthetic features to your R console. Simply install the Python-based library, then start calling `radian` instead of `R` when using R from the terminal. 
