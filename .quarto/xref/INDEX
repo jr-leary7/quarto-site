@@ -19,5 +19,8 @@
   },
   "tutorials/scaffold_simulation.qmd": {
     "scaffold_simulation.html": "082286b7"
+  },
+  "tutorials/scLANE_Trajectory_DE.qmd": {
+    "scLANE_Trajectory_DE.html": "db3feb6f"
   }
 }

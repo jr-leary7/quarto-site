@@ -1,0 +1,64 @@
+---
+title: "Interpretable scRNA-seq Trajectory DE with `{scLANE}`"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    embed-resources: true
+    fig-format: retina
+    df-print: kable
+    link-external-newwindow: true
+execute: 
+  cache: true
+  freeze: auto
+---
+
+# Introduction 
+
+In this tutorial we'll walk through a basic trajectory differential expression analysis. We'll use the `{scLANE}` package, which we developed with the goal of providing accurate and biologically interpretable models of expression over the course of a biological process. At the end are a list of references we used in developing the method & writing the accompanying manuscript, as well as the poster I presented at [ENAR 2023](https://www.enar.org/meetings/spring2023/) in Nashville. 
+
+# Libraries 
+
+If you haven't already, install the development version (currently v`r packageVersion("scLANE")`) of `{scLANE}` from [the GitHub repository](https://github.com/jr-leary7/scLANE).
+
+```{r, eval=FALSE}
+remotes:: install_github("jr-leary7/scLANE")
+```
+
+Next, we'll load the packages we need to process our single cell data, recluster the cells, and visualize the results. 
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+library(dplyr)       # data manipulation
+library(Seurat)      # scRNA-seq tools 
+library(scLANE)      # trajectory DE 
+library(ggplot2)     # plot utilities 
+library(paletteer)   # color palettes 
+library(patchwork)   # plot combination
+```
+
+# Data 
+
+
+
+
+
+
+# References 
+
+
+# Session Info
+
+```{r}
+sessioninfo::session_info()
+```
