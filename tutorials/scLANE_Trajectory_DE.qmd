@@ -1,5 +1,8 @@
 ---
 title: "Interpretable scRNA-seq Trajectory DE with `{scLANE}`"
+link-citations: true
+bibliography: scLANE_references.bib
+csl: nature.csl
 author:
   name: Jack Leary
   email: j.leary@ufl.edu
@@ -19,14 +22,14 @@ format:
     fig-format: retina
     df-print: kable
     link-external-newwindow: true
-execute: 
+execute:
   cache: true
   freeze: auto
 ---
 
 # Introduction 
 
-In this tutorial we'll walk through a basic trajectory differential expression analysis. We'll use the `{scLANE}` package, which we developed with the goal of providing accurate and biologically interpretable models of expression over the course of a biological process. At the end are a list of references we used in developing the method & writing the accompanying manuscript, as well as the poster I presented at [ENAR 2023](https://www.enar.org/meetings/spring2023/) in Nashville. 
+In this tutorial we'll walk through a basic trajectory differential expression analysis. We'll use the `{scLANE}` package, which we developed with the goal of providing accurate and biologically interpretable models of expression over the course of a biological process. At the end are a list of references we used in developing the method & writing the accompanying manuscript, as well as the poster I presented at [ENAR 2023](https://www.enar.org/meetings/spring2023/) in Nashville.
 
 # Libraries 
 
@@ -36,28 +39,240 @@ If you haven't already, install the development version (currently v`r packageVe
 remotes:: install_github("jr-leary7/scLANE")
 ```
 
-Next, we'll load the packages we need to process our single cell data, recluster the cells, and visualize the results. 
+Next, we'll load the packages we need to process, analyze, & visualize our data. 
 
 ```{r, message=FALSE, warning=FALSE, results='hide'}
-library(dplyr)       # data manipulation
-library(Seurat)      # scRNA-seq tools 
-library(scLANE)      # trajectory DE 
-library(ggplot2)     # plot utilities 
-library(paletteer)   # color palettes 
-library(patchwork)   # plot combination
+library(dplyr)                 # data manipulation
+library(scran)                 # scRNA-seq tools
+library(scater)                # scRNA-seq tools
+library(scLANE)                # trajectory DE 
+library(ggplot2)               # plot utilities 
+library(patchwork)             # plot combination
+library(slingshot)             # pseudotime estimation
+library(SingleCellExperiment)  # scRNA-seq data structures 
+```
+
+# Helper Functions 
+
+We'll also define a couple utilities to make our plots cleaner to read & easier to make. 
+
+```{r}
+theme_umap <- function(base.size = 14) {
+  ggplot2::theme_classic(base_size = base.size) + 
+  ggplot2::theme(axis.ticks = ggplot2::element_blank(), 
+                 axis.text = ggplot2::element_blank(), 
+                 plot.subtitle = ggplot2::element_text(face = "italic"), 
+                 plot.caption = ggplot2::element_text(face = "italic"))
+}
+guide_umap <- function(key.size = 4) {
+  ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = key.size, alpha = 1)))
+}
+```
+
+And consistent color palettes will make our plots easier to understand. 
+
+```{r}
+palette_cluster <- paletteer::paletteer_d("ggsci::default_jama")
+palette_celltype <- paletteer::paletteer_d("ggsci::category20_d3")
+palette_heatmap <- paletteer::paletteer_d("wesanderson::Zissou1")
 ```
 
 # Data 
 
+We'll load the pancreatic endocrinogenesis data from [Bastidas-Ponce *et al* (2019)](https://doi.org/10.1242/dev.173849), which comes with the `scVelo` Python library & has been used in several pseudotime inference / RNA velocity method papers as a good benchmark dataset. We'll use the `{reticulate}` library to generate the data using Python, then convert it to a `SingleCellExperiment` object with the Theis Lab's `{zellkonverter}` R package. We'll use the spliced mRNA counts as our default assay. 
 
+```{r}
+reticulate::use_virtualenv("~/Desktop/Python/science/venv/", required = TRUE)
+scvelo <- reticulate::import("scvelo")
+adata <- scvelo$datasets$pancreas()
+sce <- zellkonverter::AnnData2SCE(adata = adata)
+sce@assays@data$X <- NULL
+sce@assays@data$counts <- sce@assays@data$spliced
+colData(sce)$celltype <- colData(sce)$clusters
+colData(sce)$broad_celltype <- colData(sce)$clusters_coarse
+colData(sce)$clusters <- NULL
+colData(sce)$clusters_coarse <- NULL
+```
 
+We preprocess the counts using a typical pipeline, with QC, normalization, linear & nonlinear dimension reduction, and graph-based clustering. 
 
+```{r}
+set.seed(312)
+sce <- sce[rowSums(counts(sce) > 0) >= 3, colSums(counts(sce)) > 0]
+sce <- logNormCounts(sce)
+var_decomp <- modelGeneVar(sce)
+top2k_hvgs <- getTopHVGs(var_decomp, n = 2000)
+sce <- runPCA(sce,
+              subset_row = top2k_hvgs, 
+              ncomponents = 50)
+reducedDim(sce, "PCAsub") <- reducedDim(sce, "PCA")[, 1:30]
+sce <- runUMAP(sce, 
+               dimred = "PCAsub", 
+               ncomponents = 2)
+g <- buildSNNGraph(sce, 
+                   use.dimred = "PCAsub", 
+                   k = 30)
+clusters <- igraph::cluster_leiden(graph = g, 
+                                   objective_function = "modularity", 
+                                   resolution_parameter = 0.5)
+colLabels(sce) <- factor(clusters$membership)
+```
 
+Let's visualize the results. 
+
+```{r, fig.height=6}
+p0 <- reducedDim(sce, "UMAP") %>% 
+      as.data.frame() %>% 
+      magrittr::set_colnames(c("UMAP_1", "UMAP_2")) %>% 
+      mutate(leiden = sce$label) %>% 
+      ggplot(aes(x = UMAP_1, y = UMAP_2, color = leiden)) + 
+      geom_point(size = 1, alpha = 0.75) + 
+      labs(x = "UMAP 1", y = "UMAP 2", color = "Leiden Cluster") + 
+      scale_color_manual(values = palette_cluster) + 
+      theme_umap() + 
+      guide_umap()
+p1 <- reducedDim(sce, "UMAP") %>% 
+      as.data.frame() %>% 
+      magrittr::set_colnames(c("UMAP_1", "UMAP_2")) %>% 
+      mutate(celltype = sce$celltype) %>% 
+      ggplot(aes(x = UMAP_1, y = UMAP_2, color = celltype)) + 
+      geom_point(size = 1, alpha = 0.75) + 
+      labs(x = "UMAP 1", y = "UMAP 2", color = "Celltype") + 
+      scale_color_manual(values = palette_celltype) + 
+      theme_umap() + 
+      guide_umap()
+p2 <- (p0 / p1) + plot_annotation(title = "Murine Pancreatic Endocrinogenesis", 
+                                  theme = theme(plot.title = element_text(face = "bold")))
+p2
+```
+
+# Trajectory Inference 
+
+## Pseudotime Estimation
+
+We'll start by fitting a trajectory using the `{slingshot}` R package. We define cluster 4 as the starting cluster. After generating the estimates for each cell, we rescale the ordering to be defined on $[0, 1]$. This has no effect on the trajectory DE, and is mostly an aesthetic choice. 
+
+```{r}
+sling_res <- slingshot(sce, 
+                       clusterLabels = "label", 
+                       reducedDim = "PCAsub", 
+                       start.clus = "4", 
+                       approx_points = 1000)
+sling_pt <- slingPseudotime(sling_res) %>% 
+            as.data.frame() %>% 
+            magrittr::set_colnames(c("PT")) %>% 
+            mutate(PT = PT / max(PT))
+```
+
+Let's visualize the results on our UMAP embedding. They match what we would expect (knowing the biological background of the data), with ductal cells at the start of the process and endocrine celltypes such as alpha, beta, & delta cells at the end of it. 
+
+```{r, fig.height=6}
+p3 <- reducedDim(sce, "UMAP") %>% 
+      as.data.frame() %>% 
+      magrittr::set_colnames(c("UMAP_1", "UMAP_2")) %>% 
+      mutate(PT = sling_pt$PT) %>% 
+      ggplot(aes(x = UMAP_1, y = UMAP_2, color = PT)) + 
+      geom_point(size = 1, alpha = 0.75) + 
+      labs(x = "UMAP 1", y = "UMAP 2", color = "Estimated\nPseudotime") + 
+      scale_color_gradientn(colors = palette_heatmap, 
+                            labels = scales::label_number(accuracy = 0.1)) + 
+      theme_umap()
+p4 <- (p3 / p1) + plot_annotation(title = "Estimated Cell Ordering from Slingshot", 
+                                  theme = theme(plot.title = element_text(face = "bold")))
+p4
+```
+
+## Trajectory Differential Expression
+
+Next, we prepare the primary inputs to `{scLANE}`: a dense counts matrix (with cells as rows and genes as columns - this is important), a dataframe containing our estimated pseudotime ordering, and a character vector of the genes that we're interested in modeling. We parallelize over genes in order to speed up the computation at the expense of using a little more memory. The models are fit using NB GLMs with optimal spline knots identified empirically, and differential expression is quantified using a likelihood ratio test of the fitted model vs. the null (intercept-only) model. We take a stratified sample of 100 genes each from the set of HVGs we identified earlier as well as the set of non-HVGs. 
+
+```{r, results='hold'}
+set.seed(312)
+gene_vec <- c(sample(rownames(sce)[-which(rownames(sce) %in% top2k_hvgs)], 100, replace = FALSE), 
+              sample(top2k_hvgs, 100, replace = FALSE))
+raw_counts <- as.matrix(t(counts(sce)))[, gene_vec]
+scLANE_res <- testDynamic(expr.mat = raw_counts, 
+                          pt = sling_pt, 
+                          genes = gene_vec, 
+                          n.potential.basis.fns = 4, 
+                          parallel.exec = TRUE, 
+                          n.cores = 3, 
+                          track.time = TRUE)
+scLANE_res_tidy <- getResultsDE(test.dyn.results = scLANE_res)
+```
+
+We pull the top 10 most significant DE genes (the results table is already sorted by adjusted $p$-value) from the results & display their test statistics. 
+
+```{r}
+select(scLANE_res_tidy, 
+       Gene, 
+       Test_Stat, 
+       P_Val, 
+       P_Val_Adj,
+       Gene_Dynamic_Overall) %>% 
+  mutate(Gene_Dynamic_Overall = if_else(Gene_Dynamic_Overall == 1, "Dynamic", "Not Dynamic")) %>% 
+  slice_head(n = 10) %>% 
+  kableExtra::kbl(digits = 3, 
+                  booktabs = TRUE, 
+                  caption = "Top 10 DE Genes", 
+                  col.names = c("Gene", "LRT Statistic", "P-value", "Adj. P-value", "Predicted Gene Status")) %>% 
+  kableExtra::kable_classic(full_width = FALSE, "hover")
+```
+
+With the output from `testDynamic()` in hand we can use the `plotModels()` function to visualize the fitted models from `{scLANE}` and compare them to other modeling methods. We see that the `{scLANE}` model output shows essentially the same trend as the GAM output for a gene of interest, with the advantage of being a much more straightforwardly interpretable model. 
+
+```{r}
+p5 <- plotModels(test.dyn.res = scLANE_res, 
+                 gene = "Gsta3", 
+                 pt = sling_pt, 
+                 gene.counts = raw_counts) + 
+      scale_color_manual(values = c("forestgreen"))
+p5
+```
+
+We can check out the actual regression output for our gene of interest as well. 
+
+```{r}
+scLANE_res$Gsta3$Lineage_A$MARGE_Summary %>% 
+  kableExtra::kbl(digits = 3, 
+                  booktabs = TRUE, 
+                  caption = "Model Output for Gsta3", 
+                  col.names = c("Hinge Function", "Coefficient", "Std. Error", "T-statistic", "P-value")) %>% 
+  kableExtra::kable_classic(full_width = FALSE, "hover")
+```
+
+Lastly, let's cluster the set of genes we fit models for using the `clusterGenes()` function. This function supports several different clustering algorithms, and assigns genes to clusters based on their fitted values as generated internally in `testDynamic()`. Next, the `plotClusteredGenes()` function generates the data we need to plot the clustered fitted values, which we then use to create our visualization. 
+
+```{r}
+gene_clusters <- clusterGenes(test.dyn.results = scLANE_res, 
+                              clust.algo = "leiden", 
+                              use.pca = TRUE)
+gene_fitted_vals <- plotClusteredGenes(test.dyn.results = scLANE_res, 
+                                       gene.clusters = gene_clusters, 
+                                       pt = sling_pt)
+```
+
+Visualizing the clustered gene models allows us to identify groups of similarly-acting genes, and can also help identify genes of interest based on our existing biological hypotheses. 
+
+```{r}
+p6 <- ggplot(gene_fitted_vals, aes(x = PT, y = FITTED, color = CLUSTER, group = GENE)) + 
+      facet_wrap(~paste0("Lineage ", LINEAGE) + CLUSTER) + 
+      geom_line() + 
+      labs(x = "Pseudotime", 
+           y = "Fitted Values", 
+           color = "Leiden\nCluster", 
+           title = "Unsupervised Clustering of Gene Patterns") + 
+      theme_classic(base_size = 14) + 
+      guide_umap()
+p6
+```
 
 # References 
 
+::: {#refs}
+:::
 
-# Session Info
+# Session Info 
 
 ```{r}
 sessioninfo::session_info()
