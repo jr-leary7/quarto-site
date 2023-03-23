@@ -1,8 +1,5 @@
 ---
 title: "Interpretable scRNA-seq Trajectory DE with `{scLANE}`"
-link-citations: true
-bibliography: scLANE_references.bib
-csl: nature.csl
 author:
   name: Jack Leary
   email: j.leary@ufl.edu
@@ -79,13 +76,13 @@ palette_heatmap <- paletteer::paletteer_d("wesanderson::Zissou1")
 
 # Data 
 
-We'll load the pancreatic endocrinogenesis data from [Bastidas-Ponce *et al* (2019)](https://doi.org/10.1242/dev.173849), which comes with the `scVelo` Python library & has been used in several pseudotime inference / RNA velocity method papers as a good benchmark dataset. We'll use the `{reticulate}` library to generate the data using Python, then convert it to a `SingleCellExperiment` object with the Theis Lab's `{zellkonverter}` R package. We'll use the spliced mRNA counts as our default assay. 
+We'll load the pancreatic endocrinogenesis data from [Bastidas-Ponce *et al* (2019)](https://doi.org/10.1242/dev.173849), which comes with the `scVelo` Python library & has been used in several pseudotime inference / RNA velocity method papers as a good benchmark dataset. We'll use the `{reticulate}` library to generate the data using Python, then convert it to a `SingleCellExperiment` object with the Theis Lab's `{zellkonverter}` R package. We'll use the spliced mRNA counts as our default assay. Note that while downloading this dataset requires a Python installation & the installation of the `scanpy` and `scVelo` Python libraries (and their dependencies), running `{scLANE}` is done purely in R & requires no Python whatsoever. 
 
 ```{r}
 reticulate::use_virtualenv("~/Desktop/Python/science/venv/", required = TRUE)
 scvelo <- reticulate::import("scvelo")
 adata <- scvelo$datasets$pancreas()
-sce <- zellkonverter::AnnData2SCE(adata = adata)
+sce <- zellkonverter::AnnData2SCE(adata)
 sce@assays@data$X <- NULL
 sce@assays@data$counts <- sce@assays@data$spliced
 colData(sce)$celltype <- colData(sce)$clusters
@@ -94,7 +91,11 @@ colData(sce)$clusters <- NULL
 colData(sce)$clusters_coarse <- NULL
 ```
 
-We preprocess the counts using a typical pipeline, with QC, normalization, linear & nonlinear dimension reduction, and graph-based clustering. 
+```{r, echo=FALSE}
+system("rm -r ./data")  # remove data/ directory created by downloading pancreas .h5ad file
+```
+
+We preprocess the counts using a typical pipeline with QC, normalization, linear & nonlinear dimension reduction, and graph-based clustering. 
 
 ```{r}
 set.seed(312)
@@ -118,7 +119,7 @@ clusters <- igraph::cluster_leiden(graph = g,
 colLabels(sce) <- factor(clusters$membership)
 ```
 
-Let's visualize the results. 
+Let's visualize the results on our UMAP embedding. The clustering generally agrees with the celltype labels, though there is some overclustering in the ductal cells & underclustering in the endocrine celltypes. 
 
 ```{r, fig.height=6}
 p0 <- reducedDim(sce, "UMAP") %>% 
@@ -150,7 +151,7 @@ p2
 
 ## Pseudotime Estimation
 
-We'll start by fitting a trajectory using the `{slingshot}` R package. We define cluster 4 as the starting cluster. After generating the estimates for each cell, we rescale the ordering to be defined on $[0, 1]$. This has no effect on the trajectory DE, and is mostly an aesthetic choice. 
+We'll start by fitting a trajectory using the `{slingshot}` R package. We define cluster 4 as the starting cluster. After generating the estimates for each cell, we rescale the ordering to be defined on $[0, 1]$. This has no effect on the trajectory DE results however, and is mostly an aesthetic choice. 
 
 ```{r}
 sling_res <- slingshot(sce, 
@@ -184,19 +185,19 @@ p4
 
 ## Trajectory Differential Expression
 
-Next, we prepare the primary inputs to `{scLANE}`: a dense counts matrix (with cells as rows and genes as columns - this is important), a dataframe containing our estimated pseudotime ordering, and a character vector of the genes that we're interested in modeling. We parallelize over genes in order to speed up the computation at the expense of using a little more memory. The models are fit using NB GLMs with optimal spline knots identified empirically, and differential expression is quantified using a likelihood ratio test of the fitted model vs. the null (intercept-only) model. We take a stratified sample of 100 genes each from the set of HVGs we identified earlier as well as the set of non-HVGs. 
+Next, we prepare the primary inputs to `{scLANE}`: a dense counts matrix (with cells as rows and genes as columns - this is important), a dataframe containing our estimated pseudotime ordering, and a character vector of the genes that we're interested in modeling. We parallelize over genes in order to speed up the computation at the expense of using a little more memory. The models are fit using NB GLMs with optimal spline knots identified empirically, and differential expression is quantified using a likelihood ratio test of the fitted model vs. the null (intercept-only) model. We take a stratified sample of 500 genes each from the set of HVGs we identified earlier and the set of non-HVGs. 
 
 ```{r, results='hold'}
 set.seed(312)
-gene_vec <- c(sample(rownames(sce)[-which(rownames(sce) %in% top2k_hvgs)], 100, replace = FALSE), 
-              sample(top2k_hvgs, 100, replace = FALSE))
+gene_vec <- c(sample(rownames(sce)[-which(rownames(sce) %in% top2k_hvgs)], 500, replace = FALSE), 
+              sample(top2k_hvgs, 500, replace = FALSE))
 raw_counts <- as.matrix(t(counts(sce)))[, gene_vec]
 scLANE_res <- testDynamic(expr.mat = raw_counts, 
                           pt = sling_pt, 
                           genes = gene_vec, 
                           n.potential.basis.fns = 4, 
                           parallel.exec = TRUE, 
-                          n.cores = 3, 
+                          n.cores = 4, 
                           track.time = TRUE)
 scLANE_res_tidy <- getResultsDE(test.dyn.results = scLANE_res)
 ```
@@ -262,15 +263,11 @@ p6 <- ggplot(gene_fitted_vals, aes(x = PT, y = FITTED, color = CLUSTER, group = 
            y = "Fitted Values", 
            color = "Leiden\nCluster", 
            title = "Unsupervised Clustering of Gene Patterns") + 
+      scale_x_continuous(labels = scales::label_number(accuracy = 0.1)) + 
       theme_classic(base_size = 14) + 
       guide_umap()
 p6
 ```
-
-# References 
-
-::: {#refs}
-:::
 
 # Session Info 
 
