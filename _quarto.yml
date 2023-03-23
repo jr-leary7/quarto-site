@@ -22,6 +22,7 @@ website:
         menu: 
           - tutorials/SCISSORS_Reclustering.qmd
           - tutorials/scLANE_Trajectory_DE.qmd
+          - tutorials/GEE_Benchmarking.qmd
       - text: "Derivations"
         menu:
           - derivations/Intercept_Interpretation.qmd

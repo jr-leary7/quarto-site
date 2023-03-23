@@ -22,5 +22,8 @@
   },
   "tutorials/scLANE_Trajectory_DE.qmd": {
     "scLANE_Trajectory_DE.html": "db3feb6f"
+  },
+  "tutorials/GEE_Benchmarking.qmd": {
+    "GEE_Benchmarking.html": "8019930f"
   }
 }
