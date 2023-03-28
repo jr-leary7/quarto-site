@@ -95,7 +95,7 @@ $$
 **Important Note**: To multiply two matrices $\mathbf{A}$ and $\mathbf{B}$ together, the number of rows of $\mathbf{B}$ must be equal to the number of columns in $\mathbf{A}$. To generalize: 
 
 $$
-\mathbf{A}_{mn} \cdot \mathbf{B}_{np} = \mathbf{C}_{mp}
+\mathbf{A}_{m \times n} \cdot \mathbf{B}_{n \times p} = \mathbf{C}_{m \times p}
 $$
 
 ### Example 
@@ -153,20 +153,78 @@ C_mat
 
 ### Theory 
 
+Very simply, the transpose of a matrix can be thought of as simply flipping the rows & columns. The transpose of an $m \times n$ matrix is thus $n \times m$. A matrix that is its own transpose is *symmetric*. Notation-wise, some write the matrix transpose as $A^T$, others as $A^\mathsf{T}$, and still others denote it by $A^\intercal$, but I personally prefer $A^\prime$. The matrix transpose is more formally defined as:
+
+$$
+\begin{aligned}
+  & \mathbf{A}_{m \times n} \\
+  & \mathbf{B}_{n \times n} = A^\prime \\
+  & \mathbf{B}_{i, j} = \mathbf{A}_{j, i} \\
+\end{aligned}
+$$
+
 ### Example 
+
+If we define the following matrix $\mathbf{A}_{2 \times 3}$, we would expect its transpose to be the $3 \times 2$ matrix $\mathbf{A}^\prime$: 
+
+$$
+\begin{aligned}
+\mathbf{A} &= 
+  \begin{bmatrix} 
+    0 & -2 & 2 \\
+    3 & -10 & 0 \\
+  \end{bmatrix} \\
+\mathbf{A}^\prime &= 
+  \begin{bmatrix} 
+    0 & 3 \\
+    -2 & -10 \\
+    2 & 0 \\
+  \end{bmatrix} \\
+\end{aligned}
+$$
+
+We can confirm this in R using the `t()` function:
+
+```{r}
+A <- matrix(c(0, -2, 2, 3, -10, 0), 
+            nrow = 2, 
+            ncol = 3, 
+            byrow = TRUE)
+t(A)
+```
 
 ## Inversion 
 
 ### Theory 
 
+The last matrix operation we'll go over is inversion - this one is very important & is applied all throughout statistics & computing in general. The inverse of a matrix is simply another matrix that, when multiple by the first matrix, returns the identity matrix (a $n \times n$ matrix with 1s on the diagonal and 0s everywhere else). Matrices must be square to be invertible, but not even all square matrices are invertible; the ones that aren't are called *singular*. We'll gloss over that fact though, & simply assume / fervently hope that the matrices we encounter will have an easily-computable (approximate) inverse. See [this article](https://doi.org/10.2307/2307034) for more information on inverse computation. We define the inverse of $\mathbf{A}_{n \times n}$ as:
+
+$$
+\mathbf{A} \mathbf{A}^{-1} = \mathbf{I}_n
+$$
+
 ### Example 
 
+In R, the `solve()` function is used most frequently to compute the matrix inverse; since the result is an approximation, we round the results to show that the result is the identity matrix: 
+
+```{r}
+A <- matrix(rnorm(9), nrow = 3, ncol = 3)
+A_inv <- solve(A)
+round(A %*% A_inv)
+```
+
+There are many other ways to compute a matrix inverse, as well as several different types of [pseudoinverses](https://en.wikipedia.org/wiki/Generalized_inverse). We can compute [the Moore-Penrose pseudoinverse](https://en.wikipedia.org/wiki/Moore–Penrose_inverse) using the `{MASS}` package: 
+
+```{r}
+A_mp_inv <- MASS::ginv(A)
+round(A %*% A_mp_inv)
+```
 
 ## The Identity Matrix 
 
 ### Theory 
 
-The identity matrix $\mathbf{I}_{n}$ is a square matrix composed entirely of zeroes *except* along the diagonal, which is composed of ones. This matrix carries some unique properties (which are listed below) that will be helpful to us later on.  
+As mentioned previously, the identity matrix $\mathbf{I}_{n}$ is a square matrix composed entirely of zeroes *except* along the diagonal, which is composed of ones. This matrix carries some unique properties (which are listed below) that will be helpful to us later on.  
 
 $$
 \begin{aligned}
@@ -701,7 +759,7 @@ slice_head(mod_df, n = 5)
 We know that for our two continuous predictors, the intercept will indicate the predicted value of $\mathbf{y}$ for patients with values of zero for those two variables. Since we also have a categorical variable, the intercept will refer to the reference group of that variable - in this case patients who were assigned **Drug_A**. Lastly, since we're using a Poisson GLM, we know that the intercept will be the natural log of that quantity. Our model will be of the following form:
 
 $$
-\text{log}(\mathbb{E}[\text{Viral RNA}]) = \beta_0 + \beta_{\text{age}} + \beta_{\text{months}} + \beta_{\text{treat}} + \epsilon
+\text{log}(\mathbb{E}[\text{Viral RNA}]) = \beta_0 + \beta_{\text{age}} X_{\text{age}} + \beta_{\text{months}} X_{\text{months}} + \beta_{\text{treat}} X_{\text{treat}} + \epsilon
 $$
 
 Let's visualize the data so that we can get some idea of what the relationships between our variables are, and what the intercept of the model we're going to fit will tell us. First let's look at the relationship between **age** and the response, splitting by treatment group. We add a purple vertical line showing where the overall mean of **age** is. 
@@ -785,6 +843,10 @@ Finally, I've included some references below that have been helpful to me, and w
 2. Hastie, T. *et al*. [The Elements of Statistical Learning, 2nd Edition](https://doi.org/10.1007/b94608). *Springer*. 2009.
 
 3. Wakefield, J. [Bayesian and Frequentist Regression Methods](https://doi.org/10.1007/978-1-4419-0925-1). *Springer*. 2016. 
+
+4. Klein, P. N. [Coding the Matrix: Linear Algebra Through Computer Science Applications, 1st Edition](http://codingthematrix.com). *Newtonian Press*. 2013. 
+
+5. Strang, G. [Introduction to Linear Algebra, 5th Edition](https://math.mit.edu/~gs/linearalgebra/ila5/indexila5.html). *Wellesley-Cambridge Press*. 2016. 
 
 # Session Info 
 
