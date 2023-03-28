@@ -123,7 +123,7 @@
     "href": "about.html",
     "title": "Background",
     "section": "",
-    "text": "My undergrad degree is in statistics, which I did at the University of North Carolina at Chapel Hill (Go Heels!). After graduating in 2020, I spent some of the next two years earning a master’s degree in biostatistics from the University of Florida. During my second year in that program, I applied to PhD programs and ended up deciding to continue at UF and do a PhD in the same department. I’m currently entering the second semester of my first year. My most relevant studies include courses on generalized linear models, statistical learning theory, convex optimization, probability theory, mathematical statistics, and statistical computing at the undergraduate and graduate levels."
+    "text": "My undergrad degree is in statistics, which I did at the University of North Carolina at Chapel Hill (Go Heels!). After graduating in 2020, I spent some of the next two years earning a Master’s in biostatistics from the University of Florida. During my second year in that program, I applied to PhD programs and ended up deciding to continue at UF and start a PhD in the same department. I’m currently entering the second semester of my first year. My most relevant studies include courses on generalized linear models, statistical learning theory, convex optimization, probability theory, mathematical statistics, and statistical computing & software development."
   },
   {
     "objectID": "about.html#work-experience",
@@ -138,6 +138,13 @@
     "title": "Background",
     "section": "Personal Interests",
     "text": "Personal Interests\nOutside of research, I enjoy reading (my favorite genres are nautical adventure, weird history, and narrative science), riding my bike, cooking for my friends, and rock climbing."
+  },
+  {
+    "objectID": "about.html#r-packages",
+    "href": "about.html#r-packages",
+    "title": "Background",
+    "section": "R Packages",
+    "text": "R Packages\n\n{SCISSORS}\n\nAn extension of the {Seurat} framework that implements a semi-supervised scRNA-seq reclustering method built around the silhouette scores. Useful for identifying rare cell types & annotating cell subtypes.\n\n{scLANE}\n\nEver wished scRNA-seq trajectory differential expression models were more interpretable? This package implements piecewise linear GLMs, GEEs, & GLMMs in order to generate easier-to-understand models that perform just as well as GAM-based methods in classifying dynamic genes."
   },
   {
     "objectID": "about.html#publications",
