@@ -32,7 +32,7 @@ knitr::opts_chunk$set(message = FALSE, warning = FALSE, comment = NA)
 
 In the course of my recent work on [trajectory differential expression](https://jr-leary7.github.io/quarto-site/tutorials/scLANE_Trajectory_DE.html), I've spent a fair amount of time fitting [generalized estimating equation](https://online.stat.psu.edu/stat504/lesson/12/12.1) (GEE) models. These models are like classical GLMs in that they can handle non-normally distributed response variables via some specified link function & iterative estimation of coefficients, but they differ in that they can account for the variation inherent to longitudinal or otherwise clustered datasets in which observations are measured repeatedly from multiple subjects & are thus not independent. Since scRNA-seq experiments are almost always composed of samples from multiple subjects nowadays, GEEs can be of great use when building models of gene expression, as they allow us to be more confident that our standard errors are accurate. Note that unlike (generalized) linear mixed models, the GEE is a *marginal* model and thus provides only a population-level fit - GLMMs are conditional models as they provide subject-specific fits. 
 
-Since [single cell mRNA abundance follows the negative binomial distribution](https://doi.org/10.1186/s13059-021-02584-9), it's necessary that whatever GEE fitting algorithm we use support that distribution. Since the negative binomial is a two-parameter distribution, this does complicate things; the most commonly-used R packages for GEEs do not support NB models. We do have a couple options in R though, and the Python `statsmodels` ecosystem supports NB GEEs as well. Our goal here will be to benchmark the available options in terms of runtime, memory usage, and model accuracy in terms of the fitted values & the estimated coefficients. We'll keep our simulated data simple, with a negative binomial response $Y$ and a single continuously-valued covariate $X$; thus we'll estimate the coefficient vector $\boldsymbol{\beta} = [\beta_0, \beta_1]^T$ using each method for each set of simulations. 
+Since [single cell mRNA abundance follows the negative binomial distribution](https://doi.org/10.1186/s13059-021-02584-9), it's necessary that whatever GEE fitting algorithm we use support that distribution. Since the negative binomial is a two-parameter distribution, this does complicate things; the most commonly-used R packages for GEEs do not support NB models. We do have a couple options in R though, the Python `statsmodels` ecosystem supports NB GEEs as well, and there's a Julia package too. Our goal here will be to benchmark the available options in terms of runtime and model accuracy in terms of the fitted values & the estimated parameters. We'll keep our simulated data simple, with a negative binomial response $Y$ and a single continuously-valued covariate $X$; thus we'll estimate the coefficient vector $\boldsymbol{\beta} = [\beta_0, \beta_1]^T$ using each method for each set of simulations. 
 
 # Libraries 
 
@@ -41,6 +41,7 @@ Since [single cell mRNA abundance follows the negative binomial distribution](ht
 ```{r, results='hide'}
 library(dplyr)       # data manipulation
 library(ggplot2)     # plots 
+library(JuliaCall)   # call Julia from R
 library(reticulate)  # call Python from R
 ```
 
@@ -52,6 +53,16 @@ We'll call the Python code from R using `{reticulate}`, but we'll need to make s
 use_virtualenv("~/Desktop/Python/science/venv/", required = TRUE)
 sm <- import("statsmodels.api")
 pd <- import("pandas")
+```
+
+## Julia 
+
+We'll also need to activate a Julia environment, into which I've installed the [GEE.jl package](https://github.com/kshedden/GEE.jl/tree/main) and its necessary dependencies. 
+
+```{r, results='hide'}
+julia_setup()
+julia_command('using Pkg; Pkg.activate("/Users/jack/Desktop/Julia/science/");')
+julia_command("using Distributions, GLM, GEE, DataFrames;")
 ```
 
 # Data 
@@ -207,6 +218,14 @@ run_model <- function(sim.data = NULL, model.type = NULL) {
     model_preds <- model_fit$get_prediction()$linpred$predicted_mean
     model_coef <- model_fit$params
     model_est_alpha <- model_fit$cov_struct$dep_params
+  } else if (model.type == "GEE.jl") {
+    start_time <- Sys.time()
+    JuliaCall::julia_assign("sim_data", sim.data)
+    JuliaCall::julia_command('model_fit = gee(@formula(Y ~ X), sim_data, sim_data.ID, NegativeBinomial(), ExchangeableCor(), LogLink(), cov_type="robust");')
+    diff_time <- Sys.time() - start_time
+    model_est_alpha <- JuliaCall::julia_eval("GEE.corparams(model_fit)")
+    model_coef <- JuliaCall::julia_eval("GEE.coef(model_fit)")
+    model_preds <- log(JuliaCall::julia_eval("GEE.predict(model_fit)"))  # GEE.predict() gives fitted values 
   }
   # format results & compute model error
   names(model_coef) <- c("B0", "B1")
@@ -241,17 +260,23 @@ sim_list <- purrr::map(seq(100), function(i) {
   geeM_res <- run_model(sim.data = sim_data$sim_df, model.type = "geeM")
   mmmgee_res <- run_model(sim.data = sim_data$sim_df, model.type = "mmmgee")
   statsmodels_res <- run_model(sim.data = sim_data$sim_df, model.type = "statsmodels")
+  julia_GEE_res <- run_model(sim.data = sim_data$sim_df, model.type = "GEE.jl")
+  all_models <- list(glm_res, 
+                     geeM_res, 
+                     mmmgee_res, 
+                     statsmodels_res, 
+                     julia_GEE_res)
   overall_res_df <- data.frame(Iter = i, 
                                Beta_0 = sim_data$beta[1], 
                                Beta_1 = sim_data$beta[2], 
-                               Method = c(glm_res$model_type, geeM_res$model_type, mmmgee_res$model_type, statsmodels_res$model_type), 
-                               Est_Beta0 = c(glm_res$model_beta[1], geeM_res$model_beta[1], mmmgee_res$model_beta[1], statsmodels_res$model_beta[1]), 
-                               Est_Beta1 = c(glm_res$model_beta[2], geeM_res$model_beta[2], mmmgee_res$model_beta[2], statsmodels_res$model_beta[2]), 
-                               Est_Alpha = c(glm_res$model_alpha, geeM_res$model_alpha, mmmgee_res$model_alpha, statsmodels_res$model_alpha), 
-                               RMSE = c(glm_res$model_rmse, geeM_res$model_rmse, mmmgee_res$model_rmse, statsmodels_res$model_rmse), 
-                               Huber_Loss = c(glm_res$model_huber_loss, geeM_res$model_huber_loss, mmmgee_res$model_huber_loss, statsmodels_res$model_huber_loss), 
-                               Runtime = c(glm_res$model_runtime, geeM_res$model_runtime, mmmgee_res$model_runtime, statsmodels_res$model_runtime), 
-                               Runtime_Units = c(glm_res$model_runtime_units, geeM_res$model_runtime_units, mmmgee_res$model_runtime_units, statsmodels_res$model_runtime_units))
+                               Method = purrr::map_chr(all_models, \(x) x$model_type), 
+                               Est_Beta_0 = purrr::map_dbl(all_models, \(x) x$model_beta[1]), 
+                               Est_Beta_1 = purrr::map_dbl(all_models, \(x) x$model_beta[2]), 
+                               Est_Alpha = purrr::map_dbl(all_models, \(x) x$model_alpha), 
+                               RMSE = purrr::map_dbl(all_models, \(x) x$model_rmse), 
+                               Huber_Loss = purrr::map_dbl(all_models, \(x) x$model_huber_loss), 
+                               Runtime = purrr::map_dbl(all_models, \(x) x$model_runtime), 
+                               Runtime_Units = purrr::map_chr(all_models, \(x) x$model_runtime_units))
   return(overall_res_df)
 })
 ```
@@ -260,28 +285,28 @@ Let's coerce the results to a dataframe & add a couple more features.
 
 ```{r}
 sim_res_df <- purrr::reduce(sim_list, rbind) %>% 
-              mutate(Abs_Error_Beta0 = abs(Beta_0 - Est_Beta0), 
-                     Abs_Error_Beta1 = abs(Beta_1 - Est_Beta1), 
+              mutate(Abs_Error_Beta0 = abs(Beta_0 - Est_Beta_0), 
+                     Abs_Error_Beta1 = abs(Beta_1 - Est_Beta_1), 
                      Runtime_Seconds = if_else(Runtime_Units == "secs", Runtime, Runtime * 60))
 ```
 
 # Analysis 
 
-Now that we have everything simulated & recorded, we can analyze the data. Let's start by just looking at the distribution of runtime per method. While we should have expected that the GLMs would be quicker, I'm pretty surprised by just how much faster the `statsmodels` GEEs were than either R implementation. 
+Now that we have everything simulated & recorded, we can analyze the data. Let's start by just looking at the distribution of runtime per method. While we should have expected that the GLMs would be quicker, I'm pretty surprised by just how much faster the `statsmodels` GEEs were than either R implementation. The `GEE.jl` implementation is very fast too, but we can see a known issue with Julia - [the first execution takes way longer than anything else](https://julialang.org/blog/2021/01/precompile_tutorial/). 
 
 ```{r}
 ggplot(sim_res_df, aes(x = Method, y = Runtime_Seconds, fill = Method)) + 
   geom_violin(scale = "width", 
               draw_quantiles = 0.5, 
               size = 1) + 
-  scale_fill_manual(values = paletteer::paletteer_d("MetBrewer::Egypt")) + 
+  scale_fill_manual(values = paletteer::paletteer_d("ggsci::category10_d3")) + 
   labs(y = "Runtime (seconds)", fill = "Method") + 
   theme_classic(base_size = 14) + 
   theme(axis.title.x = element_blank()) + 
   guides(fill = guide_legend(override.aes = list(color = NULL)))
 ```
 
-Moving onto model accuracy, let's look at the RMSE & Huber loss. All methods have essentially the same distribution. 
+Moving onto model accuracy, let's look at the RMSE & Huber loss. All methods seem to have essentially the same distribution. 
 
 ```{r}
 sim_res_df %>% 
@@ -295,7 +320,7 @@ sim_res_df %>%
   geom_violin(scale = "width", 
               draw_quantiles = 0.5, 
               size = 1) + 
-  scale_fill_manual(values = paletteer::paletteer_d("MetBrewer::Egypt")) + 
+  scale_fill_manual(values = paletteer::paletteer_d("ggsci::category10_d3")) + 
   labs(y = "Loss", fill = "Method") + 
   theme_classic(base_size = 14) + 
   theme(axis.title.x = element_blank()) + 
@@ -309,7 +334,7 @@ ggplot(sim_res_df, aes(x = Method, y = Abs_Error_Beta0, fill = Method)) +
   geom_violin(scale = "width", 
               draw_quantiles = 0.5, 
               size = 1) + 
-  scale_fill_manual(values = paletteer::paletteer_d("MetBrewer::Egypt")) + 
+  scale_fill_manual(values = paletteer::paletteer_d("ggsci::category10_d3")) + 
   labs(y = latex2exp::TeX(r"(Absolute Error for $\beta_0$)"), fill = "Method") + 
   theme_classic(base_size = 14) + 
   theme(axis.title.x = element_blank()) + 
@@ -323,7 +348,7 @@ ggplot(sim_res_df, aes(x = Method, y = Abs_Error_Beta1, fill = Method)) +
   geom_violin(scale = "width", 
               draw_quantiles = 0.5, 
               size = 1) + 
-  scale_fill_manual(values = paletteer::paletteer_d("MetBrewer::Egypt")) + 
+  scale_fill_manual(values = paletteer::paletteer_d("ggsci::category10_d3")) + 
   labs(y = latex2exp::TeX(r"(Absolute Error for $\beta_1$)"), fill = "Method") + 
   theme_classic(base_size = 14) + 
   theme(axis.title.x = element_blank()) + 
@@ -336,10 +361,10 @@ Lastly, let's check to see if any of the GEE methods significantly differs from 
 sim_res_df %>% 
   filter(!is.na(Est_Alpha)) %>% 
   ggplot(aes(x = Est_Alpha, fill = Method, color = Method)) + 
-  facet_wrap(~Method, nrow = 3) + 
+  facet_wrap(~Method, scales = "free_y") + 
   geom_density(alpha = 0.6, size = 1) + 
-  scale_color_manual(values = paletteer::paletteer_d("MetBrewer::Egypt")[-3]) + 
-  scale_fill_manual(values = paletteer::paletteer_d("MetBrewer::Egypt")[-3]) + 
+  scale_color_manual(values = paletteer::paletteer_d("ggsci::category10_d3")[-4]) + 
+  scale_fill_manual(values = paletteer::paletteer_d("ggsci::category10_d3")[-4]) + 
   labs(x = latex2exp::TeX(r"(Estimated Correlation Parameter $\alpha$)"), 
        y = "Density", 
        fill = "Method") + 
@@ -349,7 +374,7 @@ sim_res_df %>%
 
 # Conclusions 
 
-Since the estimated coefficients and correlation parameters seem to be pretty much the same between methods, and the RMSE / Huber loss don't differ much either, it would make sense to choose the modeling framework with the fastest runtime as the best option. For GEEs this is clearly `statsmodels`, which outperformed the R-based `{geeM}` and `{mmmgee}` quite handily (mean and median values are shown below for each method). In addition, the `statsmodels` implementation varies less in runtime than either R option. This would seem to be an easy decision other than that it might be difficult to release & support R packages utilizing a Python library instead of a native R backend, since not all R users know Python, have it installed, or are capable of debugging its output. This is a tricky decision & I'm not sure of the right course to take yet, but I am impressed with how well `statsmodels` performs and will absolutely be considering using it more in the future. 
+Since the estimated coefficients and correlation parameters seem to be pretty much the same between methods, and the RMSE / Huber loss don't differ much either, it would make sense to choose the modeling framework with the fastest runtime as the best option. For GEEs this is either of `statsmodels` or `GEE.jl`, which outperformed the R-based `{geeM}` and `{mmmgee}` quite handily (mean and median values are shown below for each method). The Julia implementation is good too, if ever so marginally slower than `statsmodels`, though the time it takes to perform the first fit is somewhat annoying. In addition, the `statsmodels` implementation varies less in runtime than all other options. This would seem to be an easy decision other than that it might be difficult to release & support R packages utilizing a Python library instead of a native R backend, since not all R users know Python, have it installed, or are capable of debugging its output. `GEE.jl` obviously carries the same drawbacks, with the additional caveat of Julia being a much less widely-used language than either of R or Python. This is a tricky decision & I'm not sure of the right course to take yet, but I am impressed with how well `statsmodels` performs and will absolutely be considering using it more in the future. 
 
 ```{r}
 sim_res_df %>% 
@@ -365,7 +390,6 @@ sim_res_df %>%
                   col.names = c("Method", "Mean Runtime", "Median Runtime", "S.D. Runtime")) %>% 
   kableExtra::kable_classic(full_width = FALSE)
 ```
-
 
 # Session Info 
 
