@@ -31,10 +31,10 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
 # Introductory Guides 
 
 - [Orchestrating Single Cell Analysis with Bioconductor](http://bioconductor.org/books/release/OSCA/)
-  - This book is a thoroughly comprehensive guide on using Bioconductor tools built around the `SingleCellExperiment` data structure to perform scRNA-seq analysis. It covers basic & advanced versions everything from quality control to many different types of downstream analyses in both the single- and multi-sample cases. 
+  - This book is a thoroughly comprehensive guide on using Bioconductor tools built around the `{SingleCellExperiment}` data structure to perform scRNA-seq analysis. It covers basic & advanced versions everything from quality control to many different types of downstream analyses in both the single- and multi-sample cases. 
   
 - [`Seurat` guided clustering tutorial](https://satijalab.org/seurat/articles/pbmc3k_tutorial.html)
-  - The famous `Seurat` PBMC3k vignette that everyone has looked at at least once. Useful for beginners to get an idea of how `Seurat` works, but glosses over a ton of details & makes things look perhaps a bit too easy. 
+  - The famous `{Seurat}` PBMC3k vignette that everyone has looked at at least once. Useful for beginners to get an idea of how `{Seurat}` works, but glosses over a ton of details & makes things look perhaps a bit too easy. 
 
 # Processing Raw Reads 
 
@@ -57,7 +57,7 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
 - [`SCnorm`: Robust normalization of single cell data](https://doi.org/10.1038/nmeth.4263)
 
 - [Normalization and variance stabilization of single-cell RNA-seq data using regularized negative binomial regression](https://doi.org/10.1186/s13059-019-1874-1)
-  - This paper details `SCTransform`, a Satija Lab method for normalization that uses regularized negative binomial GLMs to model gene expression variance while accounting for overdispersion & sharing information across genes. There's been some controversy over where this method is actually that good, such as [this paper](http://dx.doi.org/10.1186/s13059-021-02451-7) which posits that the `SCTransform` model is overspecified, and recommends the usage of GLM-PCA as proposed [here](https://doi.org/10.1186/s13059-019-1861-6). 
+  - This paper details `{SCTransform}`, a Satija Lab method & R package for normalization that uses regularized negative binomial GLMs to model gene expression variance while accounting for overdispersion & sharing information across genes. There's been some controversy over where this method is actually that good, such as [this paper](http://dx.doi.org/10.1186/s13059-021-02451-7) which posits that the `{SCTransform}` model is overspecified, and recommends the usage of GLM-PCA as proposed [here](https://doi.org/10.1186/s13059-019-1861-6). 
   - [Original `SCTransform` vignette ](https://satijalab.org/seurat/articles/sctransform_vignette.html) & [`SCTransform` V2 vignette](https://satijalab.org/seurat/articles/sctransform_v2_vignette.html) with methodological improvements. 
 
 # Integration 
@@ -97,7 +97,7 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
 # Pathway Analysis 
 
 - [Variance-adjusted Mahalanobis (VAM): a fast and accurate method for cell-specific gene set scoring](https://doi.org/10.1093/nar/gkaa582)
-   - `VAM` is an easy-to-use method for assigning each cell in a sample a score bounded on $[0, 1]$ for a user-provided gene set of interest. It's conveniently wrapped around the `Seurat` framework, and I've found it to be accurate & useful in my single cell work. In addition, the author was very helpful when I reached out to him with some questions when I was first starting out. Vignettes can be found [here](https://hrfrost.host.dartmouth.edu/VAM/). 
+   - `{VAM}` is an easy-to-use method for assigning each cell in a sample a score bounded on $[0, 1]$ for a user-provided gene set of interest. It's conveniently wrapped around the `{Seurat}` framework, and I've found it to be accurate & useful in my single cell work. In addition, the author was very helpful when I reached out to him with some questions when I was first starting out. Vignettes can be found [here](https://hrfrost.host.dartmouth.edu/VAM/). 
 
 # Simulation
 
@@ -113,7 +113,7 @@ Here I'll catalog useful papers, preprints, method vignettes, Twitter discussion
   - The `{targets}` package is one of my favorite R tools, & the well-written docs above show how to create version-controlled pipelines entirely using R. This framework is an absolute godsend for large projects, simulation studies, etc., and I've used it on every longterm computational project I've worked on in the past 2 years. It makes tracking, reproducing, & parallelizing the execution of large codebases very easy, and makes reproducible research accessible to anyone with a good handle on R.  
 
 - [Parallelization in `Seurat` vignette](https://satijalab.org/seurat/articles/future_vignette.html)
-  - Shows usage of the `future` R package to improve tasks such as normalization, integration, clustering, & differential expression. 
+  - Shows usage of the `{future}` R package to improve tasks such as normalization, integration, clustering, & differential expression. 
 
 # Miscellaneous 
 

@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Jack Leary">
-<meta name="dcterms.date" content="2023-01-23">
+<meta name="dcterms.date" content="2023-03-29">
 
 <title>Jack Leary - R Development Resources</title>
 <style>
@@ -4097,6 +4097,7 @@ vertical-align: -.125em;
   <li><a href="#computational-efficiency" id="toc-computational-efficiency" class="nav-link" data-scroll-target="#computational-efficiency">Computational Efficiency</a></li>
   <li><a href="#reproducible-research" id="toc-reproducible-research" class="nav-link" data-scroll-target="#reproducible-research">Reproducible Research</a></li>
   <li><a href="#development-best-practices" id="toc-development-best-practices" class="nav-link" data-scroll-target="#development-best-practices">Development Best Practices</a></li>
+  <li><a href="#interfacing-with-other-languages" id="toc-interfacing-with-other-languages" class="nav-link" data-scroll-target="#interfacing-with-other-languages">Interfacing with Other Languages</a></li>
   <li><a href="#miscellaneous" id="toc-miscellaneous" class="nav-link" data-scroll-target="#miscellaneous">Miscellaneous</a></li>
   </ul>
 <div class="toc-actions"><div><i class="bi bi-github"></i></div><div class="action-links"><p><a href="https://github.com/jr-leary7/quarto-site/edit/main/docs/knowledge_base/R_Development.qmd" class="toc-action">Edit this page</a></p><p><a href="https://github.com/jr-leary7/quarto-site/issues/new" class="toc-action">Report an issue</a></p></div></div></nav>
@@ -4130,7 +4131,7 @@ vertical-align: -.125em;
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">January 23, 2023</p>
+      <p class="date">March 29, 2023</p>
     </div>
   </div>
   
@@ -4197,6 +4198,19 @@ vertical-align: -.125em;
 <li><a href="https://rstats.wtf/index.html">What They Forgot to Teach You About R</a>
 <ul>
 <li>This online book is less about package development &amp; more about R’s idiosyncrasies, but it contains a bunch of useful tips &amp; tricks on how to make your code more reproducible &amp; less brittle. The debugging section is clear &amp; concise, and contains links to other, more detailed resources as well.</li>
+</ul></li>
+</ul>
+</section>
+<section id="interfacing-with-other-languages" class="level1">
+<h1>Interfacing with Other Languages</h1>
+<ul>
+<li><a href="https://rstudio.github.io/reticulate/"><code>{reticulate}</code></a>
+<ul>
+<li>Seamlessly interact with Python from your R session. Super easy to use &amp; fairly full-featured, this package makes things like performing scRNA-seq analysis with both R &amp; Python libraries a breeze. This package is developed by the team at RStudio &amp; is actively maintained.</li>
+</ul></li>
+<li><a href="https://github.com/cran/JuliaCall"><code>{JuliaCall}</code></a>
+<ul>
+<li>Allows you to use <code>Julia</code> from within an R session. A great vignette can be found <a href="https://hwborchers.github.io/">here</a>.</li>
 </ul></li>
 </ul>
 </section>
@@ -4596,14 +4610,21 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 <span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">What They Forgot to Teach You About R</span><span class="co">](https://rstats.wtf/index.html)</span></span>
 <span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>This online book is less about package development &amp; more about R&#39;s idiosyncrasies, but it contains a bunch of useful tips &amp; tricks on how to make your code more reproducible &amp; less brittle. The debugging section is clear &amp; concise, and contains links to other, more detailed resources as well. </span>
-<span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a><span class="fu"># Miscellaneous </span></span>
-<span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">The R Inferno</span><span class="co">](https://www.burns-stat.com/pages/Tutor/R_inferno.pdf)</span></span>
-<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>This amusingly-titled &amp; engagingly-written book covers a variety of oddities &amp; frustrating idiosyncrasies that R has, many of which are holdovers from when R was being first developed. If you&#39;re having an annoyingly difficult low-level problem, this book might have the answer. </span>
-<span id="cb1-70"><a href="#cb1-70" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-71"><a href="#cb1-71" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">`radian`: an improved R console</span><span class="co">](https://github.com/randy3k/radian)</span></span>
-<span id="cb1-72"><a href="#cb1-72" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>If you often use R in the terminal, it can be a frustrating experience when compared to all the features (syntax highlighting, autocomplete, bracket-matching, etc.) that RStudio has. <span class="in">`radian`</span> is a command line tool that adds all these aesthetic features to your R console. Simply install the Python-based library, then start calling <span class="in">`radian`</span> instead of <span class="in">`R`</span> when using R from the terminal. </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a><span class="fu"># Interfacing with Other Languages</span></span>
+<span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">`{reticulate}`</span><span class="co">](https://rstudio.github.io/reticulate/)</span></span>
+<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>Seamlessly interact with Python from your R session. Super easy to use &amp; fairly full-featured, this package makes things like performing scRNA-seq analysis with both R &amp; Python libraries a breeze. This package is developed by the team at RStudio &amp; is actively maintained. </span>
+<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-70"><a href="#cb1-70" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">`{JuliaCall}`</span><span class="co">](https://github.com/cran/JuliaCall)</span></span>
+<span id="cb1-71"><a href="#cb1-71" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>Allows you to use <span class="in">`Julia`</span> from within an R session. A great vignette can be found <span class="co">[</span><span class="ot">here</span><span class="co">](https://hwborchers.github.io/)</span>. </span>
+<span id="cb1-72"><a href="#cb1-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-73"><a href="#cb1-73" aria-hidden="true" tabindex="-1"></a><span class="fu"># Miscellaneous </span></span>
+<span id="cb1-74"><a href="#cb1-74" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-75"><a href="#cb1-75" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">The R Inferno</span><span class="co">](https://www.burns-stat.com/pages/Tutor/R_inferno.pdf)</span></span>
+<span id="cb1-76"><a href="#cb1-76" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>This amusingly-titled &amp; engagingly-written book covers a variety of oddities &amp; frustrating idiosyncrasies that R has, many of which are holdovers from when R was being first developed. If you&#39;re having an annoyingly difficult low-level problem, this book might have the answer. </span>
+<span id="cb1-77"><a href="#cb1-77" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-78"><a href="#cb1-78" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="co">[</span><span class="ot">`radian`: an improved R console</span><span class="co">](https://github.com/randy3k/radian)</span></span>
+<span id="cb1-79"><a href="#cb1-79" aria-hidden="true" tabindex="-1"></a><span class="ss">  - </span>If you often use R in the terminal, it can be a frustrating experience when compared to all the features (syntax highlighting, autocomplete, bracket-matching, etc.) that RStudio has. <span class="in">`radian`</span> is a command line tool that adds all these aesthetic features to your R console. Simply install the Python-based library, then start calling <span class="in">`radian`</span> instead of <span class="in">`R`</span> when using R from the terminal. </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div></div></div></div></div>
 </div> <!-- /content -->
 
