@@ -60,7 +60,7 @@ pd <- import("pandas")
 We'll also need to activate a Julia environment, into which I've installed the [GEE.jl package](https://github.com/kshedden/GEE.jl/tree/main) and its necessary dependencies. 
 
 ```{r, results='hide'}
-julia_setup()
+julia_setup(verbose = FALSE)
 julia_command('using Pkg; Pkg.activate("/Users/jack/Desktop/Julia/science/");')
 julia_command("using Distributions, GLM, GEE, DataFrames;")
 ```

@@ -235,7 +235,7 @@
     "href": "tutorials/GEE_Benchmarking.html#julia",
     "title": "Benchmarking Negative Binomial GEE Model Backends",
     "section": "Julia",
-    "text": "Julia\nWe’ll also need to activate a Julia environment, into which I’ve installed the GEE.jl package and its necessary dependencies.\n\n\nCode\njulia_setup()\n\n\nJulia version 1.8.5 at location /Applications/Julia-1.8.app/Contents/Resources/julia/bin will be used.\n\n\nLoading setup script for JuliaCall...\n\n\nFinish loading setup script for JuliaCall.\n\n\nCode\njulia_command('using Pkg; Pkg.activate(\"/Users/jack/Desktop/Julia/science/\");')\njulia_command(\"using Distributions, GLM, GEE, DataFrames;\")"
+    "text": "Julia\nWe’ll also need to activate a Julia environment, into which I’ve installed the GEE.jl package and its necessary dependencies.\n\n\nCode\njulia_setup(verbose = FALSE)\njulia_command('using Pkg; Pkg.activate(\"/Users/jack/Desktop/Julia/science/\");')\njulia_command(\"using Distributions, GLM, GEE, DataFrames;\")"
   },
   {
     "objectID": "tutorials/GEE_Benchmarking.html#helper-functions",
