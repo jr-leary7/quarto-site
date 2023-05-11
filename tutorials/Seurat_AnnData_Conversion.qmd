@@ -1,0 +1,523 @@
+---
+title: "Converting `Seurat` Objects to `AnnData` Objects for use in Python"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    embed-resources: true
+    fig-format: retina
+    df-print: kable
+    link-external-newwindow: true
+execute: 
+  cache: false
+  freeze: auto
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, comment = NA)
+reticulate::use_virtualenv("~/Desktop/Python/science/venv/", required = TRUE)
+```
+
+# Introduction 
+
+if you're like me, you switch between using R & Python pretty frequently. Despite all the hype, single cell is still a relatively nascent field, and not every method is implemented in both languages. For example: if you want to run an RNA velocity analysis you're probably going to need to use Python, but when it comes to making figures for your publication it's generally easier to go back to R and use `{ggplot2}`. Whatever the motivation, it's useful to be able to seamlessly switch between programming environments - though doing so isn't always easy.
+
+There are several libraries that facilitate conversions from R-based scRNA-seq data structures (typically `SingleCellExperiment` or `Seurat` objects) to Python-based ones (`AnnData` and `loom` being the most common formats). I'm aware of [`{zellkonverter}`](https://theislab.github.io/zellkonverter/), [`{SeuratDisk}`](https://mojaveazure.github.io/seurat-disk/), [`{anndata2ri}`](https://icb-anndata2ri.readthedocs-hosted.com/en/latest/), [`{loomR}`](https://github.com/mojaveazure/loomR), & [`{sceasy}`](https://github.com/cellgeni/sceasy). While these packages generally work fairly well, they don't always transfer every piece of data that you need, and reading through the source code to try & figure out why your objects are incomplete can take up a lot of time. In addition, some of the more niche / less used dataset attributes are often undocumented or poorly-documented in conversion packages, making it difficult to identify how the data types correspond between formats. As such, sometimes it's necessary to get through the conversion on your own. This vignette will hopefully make doing so a bit easier by detailing the equivalencies across packages between different types of counts matrices, metadata, graphs, & more. We'll focus on converting directly from `Seurat` to `AnnData`, since converting between formats within the same language e.g., `AnnData` to `loom` or `SingleCellExperiment` to `Seurat` is generally easier & much better-documented. 
+
+# Libraries 
+
+## R
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+library(dplyr)       # data manipulation
+library(Seurat)      # scRNA-seq tools 
+library(ggplot2)     # plots
+library(biomaRt)     # gene metadata 
+library(paletteer)   # color palettes
+library(patchwork)   # plot alignment
+library(reticulate)  # Python interface
+```
+
+## Python
+
+```{python, message=FALSE, warning=FALSE, results='hide'}
+import numpy as np                   # linear algebra tools
+import pandas as pd                  # data manipulation
+import scanpy as sc                  # scRNA-seq tools
+import scvelo as scv                 # RNA velocity models
+import anndata as ad                 # scRNA-seq data structures
+from scipy.io import mmread          # read .mtx files
+import matplotlib.pyplot as plt      # matplotlib
+from plotnine import theme_classic   # plot themes
+from scipy.sparse import csr_matrix  # sparse matrices
+```
+
+We tweak our `matplotlib` settings to match `ggplot2::theme_classic()`, which is my preferred theme. 
+
+```{python}
+gg_theme = theme_classic()
+plt.rcParams.update(gg_theme.rcParams)
+plt.ion()
+```
+
+# Data 
+
+First we'll load a dataset to analyze; I'm a fan of the neural development data from [La Manno *et al* (2016)](https://doi.org/10.1016/j.cell.2016.09.027) as a good example for trajectory / velocity methods. The dataset is available in the `{scRNAseq}` package, though we'll need to convert it from the default `SingleCellExperiment` format to `Seurat` first. 
+
+```{r}
+brain <- scRNAseq::LaMannoBrainData(which = "human-embryo")
+brain <- CreateSeuratObject(counts = counts(brain), 
+                            project = "neural_development", 
+                            assay = "RNA", 
+                            meta.data = data.frame(colData(brain), row.names = colnames(brain)), 
+                            min.cells = 3, 
+                            min.features = 3)
+```
+
+# Analysis 
+
+## Preprocessing in R
+
+We'll start by running the data through a very typical preprocessing pipeline composed of QC, HVG selection, dimension reduction, Leiden graph-based clustering, & visualization. We'll do a couple things that are non-standard though - first, we make sure to return the fitted UMAP model after running `RunUMAP()`, which will allow us to later recompute the set of nearest-neighbors that UMAP uses internally. Next, we identify nearest neighbors twice, once with `return.neighbor` toggled & once without it. The set of NNs identified each time is the same, but the first run returns the NN indices and inter-cell distances, while the second returns the shared nearest-neighbor graph that we use as input to the Leiden clustering algorithm in `FindClusters()`. 
+
+```{r}
+brain <- brain %>% 
+         PercentageFeatureSet(pattern = "^RP[SL]", col.name = "percent_ribo") %>% 
+         PercentageFeatureSet(pattern = "^MT-", col.name = "percent_mito") %>% 
+         CellCycleScoring(s.features = cc.genes.updated.2019$s.genes, 
+                          g2m.features = cc.genes.updated.2019$g2m.genes, 
+                          set.ident = FALSE) %>% 
+         AddMetaData(metadata = .$S.Score - .$G2M.Score, col.name = "CC_difference") %>% 
+         NormalizeData(verbose = FALSE) %>% 
+         ScaleData(verbose = FALSE) %>% 
+         FindVariableFeatures(nfeatures = 3000, verbose = FALSE) %>% 
+         RunPCA(features = VariableFeatures(.), 
+                npcs = 30, 
+                verbose = FALSE, 
+                seed.use = 312, 
+                approx = TRUE) %>% 
+         RunUMAP(reduction = "pca", 
+                 dims = 1:30, 
+                 return.model = TRUE, 
+                 n.neighbors = 20, 
+                 n.components = 2, 
+                 metric = "cosine", 
+                 n.epochs = 1000, 
+                 seed.use = 312, 
+                 verbose = FALSE) %>% 
+         FindNeighbors(reduction = "pca", 
+                       dims = 1:30, 
+                       k.param = 20, 
+                       return.neighbor = TRUE, 
+                       nn.method = "annoy", 
+                       annoy.metric = "cosine", 
+                       verbose = FALSE) %>% 
+         FindNeighbors(reduction = "pca", 
+                       dims = 1:30, 
+                       k.param = 20, 
+                       compute.SNN = TRUE, 
+                       nn.method = "annoy", 
+                       annoy.metric = "cosine", 
+                       verbose = FALSE) %>% 
+         FindClusters(resolution = 0.25, 
+                      algorithm = 4, 
+                      method = "igraph", 
+                      random.seed = 312, 
+                      verbose = FALSE)
+```
+
+We'll also add & clean up the metadata by creating a cell age variable and sorting the fine celltype labels into slightly coarser categories for visualization. This data is mostly derived from [Figure 1](https://www.sciencedirect.com/science/article/pii/S0092867416313095?via%3Dihub#fig1) and [Supplementary Table 1](https://www.sciencedirect.com/science/article/pii/S0092867416313095?via%3Dihub#mmc1) in the La Manno paper. 
+
+```{r}
+brain@meta.data <- mutate(brain@meta.data, 
+                          age = case_when(Timepoint == "week_6" ~ 6,
+                                          Timepoint == "week_7" ~ 7,
+                                          Timepoint == "week_8" ~ 8,
+                                          Timepoint == "week_9" ~ 9,
+                                          Timepoint == "week_10" ~ 10,
+                                          Timepoint == "week_11" ~ 11,
+                                          TRUE ~ NA_real_), 
+                          age = as.factor(age), 
+                          broad_celltype = case_when(Cell_type %in% c("hOMTN") ~ "Oculomotor & Trochlear Nucleus", 
+                                                     Cell_type %in% c("hSert") ~ "Serotonergic", 
+                                                     Cell_type %in% c("hGaba", "hNbGaba") ~ "Gabaergic", 
+                                                     Cell_type %in% c("hDA0", "hDA1", "hDA2") ~ "Dopaminergic", 
+                                                     Cell_type %in% c("hRgl1", "hRgl2a", "hRgl2b", "hRgl2c", "hRgl3") ~ "Radial Glia", 
+                                                     Cell_type %in% c("hOPC") ~ "Oligodendrocyte Precursor", 
+                                                     Cell_type %in% c("hPeric") ~ "Pericyte", 
+                                                     Cell_type %in% c("hEndo") ~ "Endothelial", 
+                                                     Cell_type %in% c("hNProg", "hProgBP", "hProgFPL", "hProgFPM", "hProgM") ~ "Progenitor", 
+                                                     Cell_type %in% c("hRN") ~ "Red Nucleus", 
+                                                     Cell_type %in% c("hNbM", "hNbML1", "hNbML5") ~ "Neuroblast", 
+                                                     Cell_type %in% c("hMgl") ~ "Microglia", 
+                                                     Cell_type %in% c("Unk") ~ "Unknown", 
+                                                     TRUE ~ NA_character_), 
+                          broad_celltype = as.factor(broad_celltype))
+```
+
+Let's visualize the results. First, we'll define a color palette for each of our key metadata features using the `{paletteer}` package. 
+
+```{r}
+palette_cluster <- paletteer_d("ggsci::nrc_npg")
+palette_celltype <- paletteer_d("ggthemes::Tableau_20")
+palette_age <- paletteer_d("MetBrewer::Juarez")
+palette_cc <- paletteer_d("ggsci::default_locuszoom")
+```
+
+We'll also create a clean theme & legend settings for our dimension reduction plots. 
+
+```{r}
+theme_umap <- function(base.size = 14) {
+  theme_classic(base_size = base.size) + 
+  theme(axis.ticks = element_blank(), 
+        axis.text = element_blank(), 
+        plot.subtitle = element_text(face = "italic"), 
+        plot.caption = element_text(face = "italic"))
+}
+guide_umap <- function(key.size = 4) {
+  guides(color = guide_legend(override.aes = list(size = key.size, alpha = 1)))
+}
+```
+
+We plot the unsupervised graph-based clustering, the true celltype labels, cell ages, & estimated cell cycle phase on our UMAP embedding. 
+
+```{r, fig.width=14, fig.height=8}
+p0 <- DimPlot(brain, 
+              group.by = "seurat_clusters", 
+              cols = alpha(0.75, colour = palette_cluster), 
+              shuffle = TRUE, 
+              seed = 312, 
+              pt.size = 1) + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           title = "Leiden Graph-based Clustering", 
+           subtitle = "k = 20, r = 0.25") + 
+      theme_umap() + 
+      guide_umap()
+p1 <- DimPlot(brain, 
+              group.by = "broad_celltype", 
+              cols = alpha(0.75, colour = palette_celltype), 
+              shuffle = TRUE, 
+              seed = 312, 
+              pt.size = 1) + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           title = "Coarse Celltypes", 
+           subtitle = "Derived from authors' original annotations") + 
+      theme_umap() + 
+      guide_umap()
+p2 <- DimPlot(brain, 
+              group.by = "age", 
+              cols = alpha(0.75, colour = palette_age), 
+              shuffle = TRUE, 
+              seed = 312, 
+              pt.size = 1) + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           title = "Cell Age", 
+           subtitle = "Timepoints measured in weeks") + 
+      theme_umap() + 
+      guide_umap()
+p3 <- DimPlot(brain, 
+              group.by = "Phase", 
+              cols = alpha(0.75, colour = palette_cc), 
+              shuffle = TRUE, 
+              seed = 312, 
+              pt.size = 1) + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           title = "Cell Cycle Phase", 
+           subtitle = "Estimated using genes from Tirosh et al (2016)") + 
+      theme_umap() + 
+      guide_umap()
+(p0 | p1) / (p2 | p3)
+```
+
+## Conversion to `AnnData`
+
+Having done all this preprocessing already, when using tools in Python we'd ideally like to be able to keep our clustering, annotations, embeddings, etc. as they are instead of recomputing them with `scanpy`. That isn't a terrible worst option of course, but it's pretty much impossible to get the results of stochastic algorithms such as Leiden clustering and UMAP, and even simpler ones like HVG identification to agree when using differing implementations of differing methods. With that in mind, let's port our results to Python! 
+
+**Note**: there's essentially two ways to do this; the first relies on the usage of RMarkdown & `{reticulate}`, which allows you to pass objects back & forth between languages. The second, more general method is to write the data to common file formats from R, then read them in with Python & clean up the files afterwards. We'll show examples of both options, but the best general-practice method is the file-based way. We'll set up a temporary directory for the conversion files now, then remove it after we're done. 
+
+```{r}
+if (!dir.exists("./conversion_files/")) {
+  dir.create("./conversion_files")
+}
+```
+
+### Raw Counts 
+
+First, we'll write the counts matrices to a sparse matrix market file, which can be read into Python via `scipy`. **Note**: the `AnnData` ecosystem is built around $\text{cell} \times \text{gene}$ counts matrices, which is transposed from how R-based single cell tools store them. Make sure to transpose them in either R or Python before creating an `AnnData` object. 
+
+```{r, results='hide'}
+Matrix::writeMM(brain@assays$RNA@counts, file = "./conversion_files/RNA_counts.mtx")
+```
+
+### Cell & Gene Metadata
+
+We'll use CSVs to store the metadata for our cells & genes; these can be read into Python using `pandas`. The `{biomaRt}` package allows us to pull an Ensembl ID & biotype for each gene in our dataset, which we save as well. 
+
+```{r}
+readr::write_csv(brain@meta.data,
+                 file = "./conversion_files/cell_metadata.csv",
+                 col_names = TRUE)
+readr::write_csv(data.frame(cell = colnames(brain)), 
+                 file = "./conversion_files/cells.csv", 
+                 col_names = TRUE)
+readr::write_csv(data.frame(gene = rownames(brain)), 
+                 file = "./conversion_files/genes.csv", 
+                 col_names = TRUE)
+mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl"))
+gene_mapping_table <- getBM(filters = "hgnc_symbol",
+                            attributes = c("hgnc_symbol", "ensembl_gene_id", "gene_biotype"),
+                            values = rownames(brain),
+                            mart = mart, 
+                            uniqueRows = TRUE)
+gene_mapping_table <- data.frame(hgnc_symbol = rownames(brain)) %>% 
+                      left_join(gene_mapping_table, by = "hgnc_symbol") %>% 
+                      with_groups(hgnc_symbol, 
+                                  mutate, 
+                                  R = row_number()) %>% 
+                      filter(R == 1) %>% 
+                      dplyr::select(-R)
+readr::write_csv(gene_mapping_table, 
+                 file = "./conversion_files/gene_mapping.csv", 
+                 col_names = TRUE)
+```
+
+### Embeddings 
+
+Next, we'll create CSVs of our PCA & UMAP embeddings. Once we read these into Python they'll need to be converted to `numpy` arrays. 
+
+```{r}
+readr::write_csv(as.data.frame(brain@reductions$pca@cell.embeddings),
+                 file = "./conversion_files/PCA.csv",
+                 col_names = TRUE)
+readr::write_csv(as.data.frame(brain@reductions$umap@cell.embeddings),
+                 file = "./conversion_files/UMAP.csv",
+                 col_names = TRUE)
+```
+
+### Graph Structures 
+
+Lastly, we'll save our nearest-neighbor graph data using a couple different formats - sparse matrices for the NN distance & UMAP connectivity graphs, and a CSV for the NN indices. First we need to actually create the NN distance graph though; in a `Seurat` object this graph is stored in an $n \times k$ matrix containing only the distances for each cell's nearest neighbors, while in an `AnnData` object the matrix is expanded to also include a value of 0 for all non-neighbor cells i.e., a $n \times n$ sparse matrix. Luckily this is a fairly quick conversion to make: we simply record the row & column index for each cell's nearest neighbors along with the accompanying cosine distance, then use that data to build a sparse matrix. 
+
+```{r}
+knn_param <- ncol(brain@neighbors$RNA.nn@nn.idx)
+row_idx <- col_idx <- X <- vector("numeric", length = ncol(brain) * knn_param)
+for (i in seq(ncol(brain))) {
+  row_idx[(knn_param * i - (knn_param - 1)):(knn_param * i)] <- i
+  col_idx[(knn_param * i - (knn_param - 1)):(knn_param * i)] <- brain@neighbors$RNA.nn@nn.idx[i, ]
+  X[(knn_param * i - (knn_param - 1)):(knn_param * i)] <- brain@neighbors$RNA.nn@nn.dist[i, ]
+  
+}
+knn_dist_mat <- Matrix::sparseMatrix(i = row_idx, j = col_idx, x = X)
+```
+
+Another tricky bit are the cell-level [connectivities.](https://scanpy.readthedocs.io/en/stable/generated/scanpy.Neighbors.html) This term is used pretty often in analyses done with `scanpy` and `scvelo`, but there isn't really a direct equivalent in R. In short, `scanpy` (and the other packages built on top of it) uses part of the UMAP algorithm to both compute the nearest-neighbor graph & embed the cells in one step, rather than computing the neighbors separately from the UMAP embedding as is done in R. More technically, `scanpy` borrows the computation of the [fuzzy simplicial set](https://umap-learn.readthedocs.io/en/latest/_modules/umap/umap_.html#fuzzy_simplicial_set) from UMAP, which is essentially a local approximation of the distances between points for a given distance metric (cosine, in our case). See [here](https://umap-learn.readthedocs.io/en/latest/how_umap_works.html), specifically the section entitled "Adapting to Real World Data", for many more details. 
+
+Since the UMAP embeddings you get from `{Seurat}` & `scanpy` will differ somewhat because of differences in their underlying implementations, we'd like to be able to extract the connectivities from our pre-computed embedding and bring them in Python, instead of recomputing them with `scanpy` and thus having a set of neighbors that doesn't exactly correspond to our UMAP. We can do this by refitting the UMAP model using the exact settings that we did when running it through the `{Seurat}` wrapper function, but this time we specify the parameter `ret_extra = c("fgraph")`, which indicates that the fuzzy simplicial set matrix should be returned. Some of the parameters aren't stored in the returned `uwot` model, so we need to set them manually. The only tricky one is the initialization; `RunUMAP()` uses the spectral (normalized Laplacian plus Gaussian noise) initialization as of the time of writing. **Note**: make sure to use the same random seed as you did when calling `RunUMAP()` originally. 
+
+```{r}
+set.seed(312)
+umap_reembed <- uwot::umap(X = brain@reductions$pca@cell.embeddings, 
+                           n_neighbors = brain@reductions$umap@misc$model$n_neighbors,
+                           n_components = 2,
+                           metric = "cosine", 
+                           n_epochs = brain@reductions$umap@misc$model$n_epochs, 
+                           init = "spectral", 
+                           learning_rate = brain@reductions$umap@misc$model$alpha, 
+                           min_dist = 0.1, 
+                           local_connectivity = brain@reductions$umap@misc$model$local_connectivity, 
+                           nn_method = "annoy", 
+                           negative_sample_rate = brain@reductions$umap@misc$model$negative_sample_rate, 
+                           ret_extra = c("fgraph"),
+                           n_threads = 2,
+                           a = brain@reductions$umap@misc$model$a, 
+                           b = brain@reductions$umap@misc$model$b, 
+                           search_k = brain@reductions$umap@misc$model$search_k, 
+                           approx_pow = brain@reductions$umap@misc$model$approx_pow, 
+                           verbose = FALSE)
+```
+
+Now that we've created our data, we write it to files. 
+
+```{r, results='hide'}
+Matrix::writeMM(knn_dist_mat, file = "./conversion_files/KNN_distances.mtx")
+Matrix::writeMM(umap_reembed$fgraph, file = "./conversion_files/UMAP_connectivity_matrix.mtx")
+readr::write_csv(as.data.frame(brain@neighbors$RNA.nn@nn.idx), 
+                 file = "./conversion_files/KNN_indices.csv", 
+                 col_names = TRUE)
+```
+
+## Downstream Analysis in Python
+
+We read our data into Python, & do some necessary reformatting. 
+
+```{python}
+# raw counts 
+RNA_counts = mmread('./conversion_files/RNA_counts.mtx').transpose().tocsr()
+# cell metadata
+cell_metadata = pd.read_csv('./conversion_files/cell_metadata.csv').rename(columns={'Cell_ID': 'cell'}).set_index('cell', drop=False)
+cell_metadata['seurat_clusters'] = cell_metadata['seurat_clusters'].astype('category')
+cell_metadata['age'] = pd.Categorical(cell_metadata['age'], categories=['6', '7', '8', '9', '10', '11'])
+cat_cols = ['broad_celltype', 'Phase', 'Cell_type']
+cell_metadata[cat_cols] = cell_metadata[cat_cols].apply(lambda x: pd.Categorical(x, categories=list(dict.fromkeys(sorted(x, key=str.lower)))))
+cell_names = pd.read_csv('./conversion_files/cells.csv').set_index('cell', drop=False)
+# gene metadata
+gene_names = pd.read_csv('./conversion_files/genes.csv').set_index('gene', drop=False)
+gene_mapping_table = pd.read_csv('./conversion_files/gene_mapping.csv').set_index('hgnc_symbol', drop=False)
+# reduced dimensional embeddings
+pca_embedding = pd.read_csv('./conversion_files/PCA.csv').set_index(pd.Index(cell_names['cell'])).to_numpy()
+umap_embedding = pd.read_csv('./conversion_files/UMAP.csv').set_index(pd.Index(cell_names['cell'])).to_numpy()
+# KNN graphs
+knn_idx = pd.read_csv('./conversion_files/KNN_indices.csv').to_numpy().astype('int32') - 1
+knn_dist_mat = mmread('./conversion_files/KNN_distances.mtx').tocsr().astype('float64')
+knn_conn_mat = mmread('./conversion_files/UMAP_connectivity_matrix.mtx').tocsr().astype('float64')
+```
+
+Now we can finally create our `AnnData` object. We make sure to store the unprocessed version of the data in the `AnnData.raw` slot. 
+
+```{python}
+layers_dict = {'RNA': RNA_counts}
+dimred_dict = {'X_pca': pca_embedding, 'X_umap': umap_embedding}
+graph_dict = {'distances': knn_dist_mat, 'connectivities': knn_conn_mat}
+uns_dict = {
+    'broad_celltype_colors': np.array(r.palette_celltype), 
+    'seurat_clusters_colors': np.array(r.palette_cluster), 
+    'age_colors': np.array(r.palette_age), 
+    'Phase_colors': np.array(r.palette_cc), 
+    'neighbors': {
+        'connectivities_key': 'connectivities', 
+        'distances_key': 'distances', 
+        'indices': knn_idx, 
+        'params': {
+            'n_neighbors': knn_idx.shape[1], 
+            'method': 'Seurat::FindNeighbors()', 
+            'metric': 'cosine', 
+            'n_pcs': pca_embedding.shape[1], 
+            'use_rep': 'X_pca'
+        } 
+    }
+}
+adata = ad.AnnData(
+    X=layers_dict['RNA'], 
+    obs=cell_metadata, 
+    var=gene_mapping_table, 
+    layers=layers_dict, 
+    obsm=dimred_dict, 
+    obsp=graph_dict, 
+    uns=uns_dict
+)
+adata.raw = adata
+adata
+```
+
+When plotting the UMAP embedding, we can see that the coordinates & colors have been preserved. 
+
+```{python}
+ax = sc.pl.scatter(
+  adata, 
+  basis='umap',
+  color='broad_celltype', 
+  title='', 
+  frameon=True, 
+  show=False, 
+  legend_fontsize=10, 
+  right_margin=0.7
+)
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.spines['bottom'].set_linewidth(1.5)
+ax.spines['left'].set_linewidth(1.5)
+ax.set_xlabel('UMAP 1')
+ax.set_ylabel('UMAP 2')
+ax.set_title(label='UMAP Embeddings from Seurat', loc='left')
+plt.gcf().set_dpi(320)
+plt.show()
+```
+
+Now we can proceed with a typical downstream analysis using `scanpy`. In this case, we'll start by estimating a graph abstraction using `PAGA`. 
+
+```{python}
+sc.pp.filter_genes_dispersion(adata, flavor='seurat', n_top_genes=3000)
+sc.pp.normalize_per_cell(adata)
+sc.pp.log1p(adata)
+sc.pp.scale(adata)
+sc.tl.draw_graph(adata, layout='fr', random_state=312)
+sc.tl.diffmap(adata, random_state=312)
+ax = sc.pl.scatter(
+  adata,
+  basis='diffmap',
+  color='broad_celltype', 
+  title='', 
+  frameon=True, 
+  show=False, 
+  legend_fontsize=10, 
+  right_margin=0.7
+)
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.spines['bottom'].set_linewidth(1.5)
+ax.spines['left'].set_linewidth(1.5)
+ax.set_xlabel('DC 1')
+ax.set_ylabel('DC 2')
+ax.set_title(label='Diffusion Map Embedding of Fine Celltypes', loc='left')
+plt.gcf().set_dpi(320)
+plt.show()
+```
+
+```{python}
+sc.pl.paga_compare(adata, color='broad_celltype')
+```
+
+```{python}
+adata.uns['iroot'] = np.flatnonzero(adata.obs['broad_celltype']  == 'Progenitor')[0]
+sc.tl.dpt(adata)
+sc.tl.paga(adata, groups='fine_celltype')
+sc.pl.paga(adata, color='broad_celltype')
+```
+
+
+```{python}
+sc.tl.paga(adata, groups='broad_celltype')
+sc.pl.paga_compare(adata, color='broad_celltype')
+```
+
+```{python}
+sc.pl.scatter(
+  adata, 
+  color='broad_celltype', 
+  edges=True
+)
+```
+
+## File Cleanup
+
+Lastly, we'll remove the temporary directory we used to store our data while converting it all to `AnnData`. Be careful when using `rm -rf`!
+
+```{r}
+if (dir.exists("./conversion_files")) {
+  system("rm -rf ./conversion_files")
+}
+```
+
+# Conclusions 
+
+
+# Session Info 
+
+```{r}
+sessioninfo::session_info()
+```

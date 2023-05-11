@@ -1,0 +1,659 @@
+---
+title: "Assorted Large Sample Theory Practice Problems"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    embed-resources: true
+    fig-format: retina
+    df-print: kable
+    link-external-newwindow: true
+execute: 
+  cache: true
+  freeze: auto
+  warning: false
+---
+
+# Introduction 
+
+Here are a couple practice problems I wrote up while studying for a course in statistical asymptotics. The main focus is on the application of influence functions & U-statistics, though there are some simulation examples of statistical properties with code as well. Sources for the problems are listed throughout; some are taken directly from the original source while others I have modified slightly.  
+
+# Libraries
+
+```{r}
+library(dplyr)    # data manipulation
+library(ggplot2)  # plots
+```
+
+# Delta Method 
+
+## Exercise 3.1 - *Asymptotic Statistics*
+
+This is exercise 3.1 from [van der Vaart's textbook](https://doi.org/10.1017/CBO9780511802256). The setup is as follows:
+
+$$
+\begin{aligned}
+  & X_1, ..., X_n \overset{\small{\text{IID}}}{\sim} F \\
+  &\bar{X}_n = n^{-1} \sum_{i=1}^n X_i \\
+  & S^2_n = n^{-1} \sum_{i=1}^n \left( X_i - \bar{X}_n \right)^2 \\
+  & \mu_4 = \mathbb{E} \left[ (X - \mu)^4 \right];\: \mu_4 \in \mathbb{R} \\
+\end{aligned}
+$$
+
+We're interested in finding the joint asymptotic distribution of the following, and in determining what assumptions are necessary for the two quantities to be considered asymptotically independent:
+
+$$
+\begin{pmatrix}
+  \sqrt{n}(\bar{X}_n - \mu) \\
+  \sqrt{n}(S^2_n - \sigma^2)
+\end{pmatrix}
+$$
+
+We'll start by defining the basics; we know that the sample mean converges in expectation to the population mean, and thus converges in probability as well. 
+
+$$
+\mathbb{E} \left[ \bar{X}_n \right]\mu \implies \bar{X}_n \overset{p}{\to} \mu
+$$
+
+On the other hand, $S^2_n$ is not an unbiased estimator, with expectation:
+
+$$
+\mathbb{E} \left[ S^2_n \right] = \frac{n-1}{n} \sigma^2
+$$
+
+However, we can show that it converges to $\sigma^2$ in probability. **Note**: going forwards, raw moments will be denoted $m_k$, and central moments $\mu_k$. 
+
+$$
+\begin{aligned}
+  S^2_n 
+    &= n^{-1} \sum_{i=1}^n \left( X_i - \bar{X}_n \right)^2 \\
+    &= n^{-1} \sum_{i=1}^n X_i^2 - 2X_i\bar{X}_n + \bar{X}_n^2 \\
+    &= \bar{X^2_n} - \bar{X}^2_n \\
+  \underset{n \to \infty}{\text{lim}} S^2_n 
+    &= m_2 - m_1^2 \\
+    &= \sigma^2 \\
+  \implies S^2_n &\overset{p}{\to} \sigma^2 \\
+\end{aligned}
+$$
+
+Since both estimators converge in probability to their population parameters, they converge in distribution as well thanks to the following property of stochastic convergence:
+
+$$
+X_n \overset{p}{\to} X \implies X_n \overset{d}{\to} X
+$$
+
+The asymptotic variance of the sample mean is derived like so:
+
+$$
+\begin{aligned}
+  \text{Var}(\bar{X}_n)
+    &= \text{Var} \left( n^{-1} \sum_{i=1}^n X_i \right) \\
+    &= n^{-2} \sum_{i=1}^n \text{Var}(X_i) \\
+    &= n^{-1}\sigma^2 \\
+\end{aligned}
+$$
+
+Thus, the asymptotic distribution of the sample mean is:
+
+$$
+\sqrt{n} \left( \bar{X}_n - \mu \right) \overset{d}{\to} \mathcal{N}\left( 0, \sigma^2 \right)
+$$
+
+Deriving the asymptotic variance for $S^2_n$ is slightly trickier. Going forward, we'll assume that the observations $X_i$ have been centered around $\mu$, and thus have zero mean. This will simplify the following derivation somewhat:
+
+$$
+\begin{aligned}
+\text{Var} \left( S^2_n \right)
+  &= \text{Var} \left( n^{-1} \sum_{i=1}^n X_i^2 - \bar{X}_n^2  \right) \\ 
+  &= \text{Var} \left( n^{-1} \sum_{i=1}^n X_i^2 \right) \\ 
+  &= n^{-2} \sum_{i=1}^n \text{Var} \left( X_i^2 \right) \\
+  &= n^{-2} \sum_{i=1}^n \mathbb{E}\left[ X_i^4 \right] - \left( \mathbb{E}[X_i^2] \right)^2 \\
+  &= n^{-2} \sum_{i=1}^n m_4 - m_2^2 \\
+  &= n^{-1} \left( m_4 - m_2^2 \right) \\
+\end{aligned}
+$$
+
+Thus, the asymptotic distribution for the sample variance is:
+
+$$
+\sqrt{n} \left( S^2_n - \sigma^2 \right) \overset{d}{\to} \mathcal{N} \left( 0, m_4 - m_2^2 \right)
+$$
+
+Now all we need is the covariance between the two estimators. We'll derive this using the multivariate Delta Method. First, we'll need to define the sample mean and variance as a functional. Then, we'll derive the asymptotic distribution of that quantity, the general form of which will be:
+
+$$
+\sqrt{n} \left( \hat{\theta}_n - \theta \right) \overset{d}{\to} \mathcal{N}_2(\mathbf{0}, \boldsymbol{\Sigma})
+$$
+
+The multivariate Delta Method then allows us to formulate the joint asymptotic distribution of the original estimators like so:
+
+$$
+\sqrt{n} \left( \phi(\hat{\theta}_n) - \phi(\theta) \right) \overset{d}{\to} \mathcal{N}_2 \left( \mathbf{0},\: \phi^\prime(\theta) \boldsymbol{\Sigma} \phi^\prime(\theta)^T \right)
+$$
+
+We can derive the covariance between the sample mean & sample variance in the following fashion, making use of some properties of summation:
+
+$$
+\begin{aligned}
+  \text{Cov} \left( \bar{X}_n, S^2_n \right)
+    &= \mathbb{E} \left[ \left( \bar{X}_n  - \mathbb{E} \left[ \bar{X}_n \right] \right) \left( S^2_n  - \mathbb{E} \left[ S^2_n \right] \right) \right] \\
+    &= \mathbb{E} \left[ \left( \bar{X}_n  - m_1 \right) \left( S^2_n  - m_2 \right) \right] \\
+    &= \mathbb{E} \left[ \bar{X}_n S^2_n -m_2\bar{X}_n -m_1S^2_n + m_1m_2 \right] \\
+    &= \mathbb{E} \left[ \bar{X}_nS^2_n \right] - m_2m_1 - m_1m_2 +m_1m_2 \\
+    &= \mathbb{E} \left[ \bar{X}_nS^2_n \right] - m_1m_2 \\
+    &= \mathbb{E} \left[ \left( n^{-1} \sum_{i=1}^n X_i \right) \left( n^{-1} \sum_{i=1}^n X_i^2 \right)  \right] - m_1m_2 \\
+    &= \mathbb{E} \left[ n^{-2} \sum_{i=1}^n X_i \sum_{i=1}^n X_i^2 \right] - m_1m_2 \\
+    &= \mathbb{E} \left[ n^{-2} \sum_{i=1}^n \sum_{j=1}^n X_i X_j^2 \right] - m_1m_2 \\
+    &= n^{-2} \sum_{i=1}^n \sum_{j=1}^n \mathbb{E} \left[ X_j^3 \right] -m_1m_2 \\
+    &= n^{-2} (n^2m_3) -m_1m_2 \\
+    &= m_3 - m_1m_2 \\
+\end{aligned}
+$$
+
+Thus we have the asymptotic distribution for the first and second moments (this can be verified by checking p.27 of the van der Vaart textbook). For expediency's sake, we'll refer to the variance-covariance matrix of the asymptotic distribution as $\boldsymbol{\Sigma^*}$ going forwards. 
+
+$$
+\sqrt{n} \left( \begin{pmatrix} \bar{X}_n \\ \bar{X^2}_n \end{pmatrix} - \begin{pmatrix} m_1 \\ m_2 \end{pmatrix} \right) 
+\overset{d}{\to}
+\mathcal{N}_2 \left( \mathbf{0},\: \begin{pmatrix} m_2 - m_1^2 & m_3 - m_1m_2 \\ m_3 - m_1m_2 & m_4 - m_2^2 \end{pmatrix} \right)
+$$
+
+Next we need to set up our function, which we do like so:
+
+$$
+\begin{aligned}
+  \phi(x, y) &= \begin{pmatrix} x \\ y - x^2 \end{pmatrix} \\
+  \phi \left( m_1, m_2 \right) &= \begin{pmatrix} \bar{X}_n \\ S^2_n \end{pmatrix} \\
+\end{aligned}
+$$
+
+The gradient of $\phi$ is then:
+
+$$
+\begin{aligned}
+  \phi^\prime_{m_1, m_2} 
+    &= \begin{pmatrix}
+         \frac{\partial}{\partial m_1} \phi_1(m_1, m_2) & \frac{\partial}{\partial m_1} \phi_2(m_1, m_2) \\
+         \frac{\partial}{\partial m_2} \phi_1(m_1, m_2) & \frac{\partial}{\partial m_2} \phi_2(m_1, m_2) \\
+       \end{pmatrix} \\
+    &= \begin{pmatrix}
+         1 & -2m_1 \\
+         0 & 1 \\
+       \end{pmatrix}
+\end{aligned}
+$$
+
+Using the multivariate Delta Method, we have thus arrived at the joint asymptotic distribution of the sample mean & sample variance:
+
+$$
+\sqrt{n} \left( \begin{pmatrix} \bar{X}_n \\ S^2_n \end{pmatrix} - \begin{pmatrix} \mu \\ \sigma^2 \end{pmatrix} \right)
+\overset{d}{\to}
+\mathcal{N}_2 \left( \mathbf{0},\: \phi^\prime_{m_1, m_2} \boldsymbol{\Sigma^*} \left( \phi^\prime_{m_1, m_2} \right)^T \right)
+$$
+
+In deriving the above quantity, we've also figured out what conditions are necessary for $\bar{X}_n$ and $S^2_n$ to be independent. We defined the covariance between the two estimators above:
+
+$$
+\text{Cov} \left( \bar{X}_n, S^2_n \right) = m_3 - m_1m_2
+$$
+
+Keeping in mind that we have centered our data,  we know that our raw moments are equivalent to central moments. For symmetric distributions, the expectations of the odd moments are all equal to zero, and thus the covariance as defined above will go to zero if the distribution function $F$ is symmetric. In order for us to strictly say that $\bar{X}_n$ and $S^2_n$ are independent and not just uncorrelated, the two quantities must be jointly normally distributed, which we have shown above. Thus, as long as $F$ is symmetric, the sample mean and sample variance are independent. 
+
+# U-Statistics
+
+## Exercise 12.3 - *Asymptotic Statistics*
+
+This problem is also pulled from the van der Vaart book; the goal is simply to determine an appropriate kernel for a U-statistic for the third central moment. 
+
+$$
+\mu_3 = \mathbb{E} \left[ (X - \mathbb{E}[X])^3 \right]
+$$
+
+We could attempt to define the kernel as we would when creating a U-statistic for the sample variance, as shown below:
+
+$$
+h(X_i, X_j) = (X_i - X_j)^3
+$$
+
+However, this kernel is no symmetric, which is a highly desirable property in U-statistic kernels i.e., $h(x_i, x_j) \neq h(x_j, x_i)$ as shown below:
+
+$$
+\begin{aligned}
+  h(X_i, X_j) 
+    &= (X_i - X_j)^3 \\
+    &= X_i^3 -3X_jX_i^2 + 3X_j^2X_i - X_j^3 \\
+  h(X_j, X_i)
+    &= (X_j - X_i)^3 \\
+    &= X_j^3 -3X_iX_j^2 + 3X_i^2X_j - X_i^3 \\
+\implies h(X_i, X_j) &= -h(X_j, X_i) \\
+\end{aligned}
+$$
+
+However, any asymmetric U-statistic of degree $r$ may be symmetrized by averaging over all possible input permutations using the following technique:
+
+$$
+g(X_1, ..., X_r) = (r!)^{-1} \sum_{i_1, ..., i_r} h(X_{i_1}, ..., X_{i_r})
+$$
+
+We'll thus use the following symmetric kernel of degree 3 as detailed in [Locke & Spurrier (1978)](https://doi.org/10.2307/2335095):
+
+$$
+h(X_1, X_2, X_3) = \frac{1}{3} \sum_{i=1}^3 \left( X_i - \frac{1}{3} (X_1 + X_2 + X_3) \right)^3
+$$
+
+This in turn leads to the following U-statistic for $\mu_k$:
+
+$$
+\begin{aligned}
+  U_n 
+    &= \binom{n}{3}^{-1} \sum_{i=1}^n \sum_{i<j} \sum_{j<k} h(X_i, X_j, X_k) \\
+    &= \binom{n}{3}^{-1} \sum_{i=1}^n \sum_{i<j} \sum_{j<k} \frac{1}{3} \left( \left( X_i - \frac{1}{3}(X_i + X_j + X_k) \right)^3 + \left( X_j - \frac{1}{3}(X_i + X_j + X_k) \right)^3 + \left( X_k - \frac{1}{3}(X_i + X_j + X_k) \right)^3\right)
+\end{aligned}
+$$
+
+We can show this empirically by testing it via simulation. Here we simulate $n = 1000$ realizations from $X_1, \dots, X_n \overset{\small{\text{IID}}}{\sim} \mathcal{N}(3,\: 1)$. Since we're sampling from a normal distribution, which is symmetric about $\mu$, the expectation of the third central moment is equal to zero. In the interest of showing how the U-statistic converges towards $\mu_3$ as sample size grows, we'll compute the statistic for several values of $n$ and then visualize the results. First, we'll need to define a helper function for our kernel:
+
+```{r}
+h_ijk <- function(x_i, x_j, x_k) {
+  sum_ijk <- x_i + x_j + x_k
+  mean_ijk <- 1/3 * ((x_i - 1/3 * sum_ijk)^3 + (x_j - 1/3 * sum_ijk)^3 + (x_k - 1/3 * sum_ijk)^3)
+  return(mean_ijk)
+}
+```
+
+Now we iterate over sample sizes & save the results. We'll perform a few replications per sample size value for reproducibility reasons. 
+
+```{r}
+n_vals <- purrr::map(c(5, 10, 15, 25, 40, 50, 75, 100, 150, 200, 250, 300, 400, 500), \(x) rep(x, 3)) %>% 
+          purrr::reduce(c)
+U_n_vals <- numeric(length = length(n_vals)) 
+for (n in seq(n_vals)) {
+  set.seed(n)
+  sample_n <- n_vals[n]
+  mu <- 3
+  sigma <- 1
+  x <- rnorm(sample_n, mean = mu, sd = sigma)
+  i <- 1
+  U_sum <- 0
+  while (i <= sample_n) {
+    j <- i + 1
+    while (j <= sample_n) {
+      k <- j + 1
+      while (k <= sample_n) {
+        h_val <- h_ijk(x_i = x[i], x_j = x[j], x_k = x[k])
+        U_sum <- U_sum + h_val
+        k <- k + 1
+      }
+      j <- j + 1
+    }
+    i <- i + 1
+  }
+  U_n <- choose(sample_n, 3)^(-1) * U_sum
+  U_n_vals[n] <- U_n
+}
+```
+
+We can see that the U-statistic grows very close to the true value of zero as $n$ increases. The drawback of this approach is the computational cost; even for this relatively small sample size the runtime is several minutes, and grows on the order of $O(n^3)$. 
+
+```{r}
+data.frame(U = U_n_vals, 
+           N = n_vals) %>% 
+  ggplot(aes(x = N, y = abs(U))) + 
+  geom_point() + 
+  geom_smooth(color = "forestgreen", se = FALSE) + 
+  labs(x = latex2exp::TeX(r"($\textit{n}$)"), 
+       y = latex2exp::TeX(r"($|\textit{U_n} - \theta|$)")) + 
+  theme_classic(base_size = 14)
+```
+
+## Example 1.3.2 - *U-Statistics: Theory and Practice*
+
+This problem is a slight modification of one of the examples from [Lee (1990)](https://doi.org/10.1201/9780203734520) seen on page 13. Instead of deriving the asymptotic distribution of the U-statistic for the sample variance, we'll do so for the second raw moment $m_2$. 
+
+$$
+\theta = E[X^2] = m_2
+$$
+
+From the definition of variance, we know that $m_2 = \mu_2 + m_1^2$. Our kernel, which is symmetric, will thus be a combination of the kernels for the sample variance and for the expectation squared:
+
+$$
+h(X_1, X_2) = \frac{(X_1 - X_2)^2}{2} + X_1X_2
+$$
+
+having expectation:
+
+$$
+\begin{aligned}
+  \mathbb{E}[h(X_1, X_2)] 
+    &= \mathbb{E} \left[ \frac{(X_1 - X_2)^2}{2} + X_1X_2 \right] \\
+    &= \frac{1}{2}(\mathbb{E} \left[ (X_1 - X_2)^2 \right]) - \mathbb{E}[X_1X_2] \\
+    &= \frac{1}{2}(m_2 - 2\mu^2 + m_2) + \mu^2 \\
+    &= m_2 \\
+\end{aligned}
+$$
+
+This leads us to the following U-statistic:
+
+$$
+U_n = \binom{n}{2}^{-1} \sum_{i=1}^n \sum_{i<j} \frac{(X_i - X_j)^2}{2} + X_iX_j
+$$
+
+We define the following:
+
+$$
+\begin{aligned}
+  h_1(X_1, X_2) &= \mathbb{E}[h(X_1, X_2) | X_1] \\ 
+  h_1^c(X_1, X_2) 
+    &= \mathbb{E}[h(X_1, X_2) | X_1] - \theta \\ 
+    &= \mathbb{E}[h(X_1, X_2) | X_1] - m_2 \\ 
+  \zeta_1 
+    &= \mathbb{E} \left[ (h_1^c(X_1, X_2))^2 \right] \\
+    &= \mathbb{E} \left[ (\mathbb{E}[h(X_1, X_2) | X_1] - m_2)^2 \right] \\
+    &= \text{Var} \left( \mathbb{E}[h(X_1, X_2) | X_1] \right) \\
+  \text{Var}(U_n) &\overset{p}{\to} \frac{r^2}{n} \zeta_1 \\
+  \sqrt{n}(U_n - m_2) &\overset{d}{\to} \mathcal{N}(0,\: r^2\zeta_1) \\
+\end{aligned}
+$$
+
+We begin with the expectation of the kernel conditional on $X_1$:
+
+$$
+\begin{aligned}
+  h_1(X_1, X_2) 
+    &= \mathbb{E} \left[ \frac{(X_1 - X_2)^2}{2} + X_1X_2 | X_1 \right] \\
+    &= \frac{1}{2} \mathbb{E}[X_1^2 -2X_1X_2 + X_2^2 | X_1] + \mathbb{E}[X_1X_2 | X_1] \\
+    &= \frac{1}{2}(X_1^2 - 2X_1\mu + m_2) + X_1\mu \\
+    &= \frac{X_1^2 + m_2}{2}
+\end{aligned}
+$$
+
+From which we can derive $\zeta_1$:
+
+$$
+\begin{aligned}
+  \zeta_1
+    &= \text{Var} \left( \frac{X_1^2 + m_2}{2} \right) \\
+    &= \frac{1}{4} \text{Var}(X_1^2 + m_2) \\
+    &= \frac{1}{4} \left( \text{Var}(X_1^2) + \text{Var}(m_2) \right) \\
+    &= \frac{1}{4} \text{Var}(X_1^2 \\
+    &= \frac{1}{4} \mathbb{E} \left[ (X_1^2 - m_2)^2 \right] \\
+    &= \frac{1}{4}(m_4 - 2m_2m_2 + m_2^2) \\
+    &= \frac{m_4 - m_2^2}{4} \\
+\end{aligned}
+$$
+
+Finally, since our kernel has degree $r = 2$:
+
+$$
+\sqrt{n}(U_n - m_2) \overset{d}{\to} \mathcal{N}(0,\: m_4 - m_2^2)
+$$
+
+We can confirm this using simulation as well. First, we define a new function that computes our kernel:
+
+```{r}
+h_ij <- function(x_i, x_j) {
+  m2_ij <- ((x_i - x_j)^2) / 2 + x_i * x_j
+  return(m2_ij)
+}
+```
+
+We'll simulate observations from the following distribution. From the definition of variance, we know that $m_2 = \text{Var}(X) + \left( \mathbb{E}(X) \right)^2$, which in our case is: $m_2 = 1 + 2^2 = 5$. This is the value against which we'll compare our U-statistics, whose expectation is $m_2$. 
+
+$$
+X_1, \dots, X_n \overset{\small{\text{IID}}}{\sim} \mathcal{N}(2,\: 1)
+$$
+
+Now we iterate over a range of possible values for $n$, running the simulation 3x per value, and recording the U-statistics that we estimate. 
+
+```{r}
+n_vals <- purrr::map(c(5, 10, 15, 25, 40, 50, 75, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1250), \(x) rep(x, 3)) %>% 
+          purrr::reduce(c)
+U_n_vals <- numeric(length = length(n_vals)) 
+for (n in seq(n_vals)) {
+  set.seed(n)
+  sample_n <- n_vals[n]
+  mu <- 2
+  sigma <- 1
+  x <- rnorm(sample_n, mean = mu, sd = sigma)
+  i <- 1
+  U_sum <- 0
+  while (i <= sample_n) {
+    j <- i + 1
+    while (j <= sample_n) {
+      h_val <- h_ij(x_i = x[i], x_j = x[j])
+      U_sum <- U_sum + h_val
+      j <- j + 1
+    }
+    i <- i + 1
+  }
+  U_n <- choose(sample_n, 2)^(-1) * U_sum
+  U_n_vals[n] <- U_n
+}
+```
+
+Plotting the results, we see a monotonically decreasing trend of the absolute error of $U_n$ when compared to the true value $m_2 = 5$. 
+
+```{r}
+data.frame(U = U_n_vals, 
+           N = n_vals) %>% 
+  ggplot(aes(x = N, y = abs(U - 5))) + 
+  geom_point() + 
+  geom_smooth(color = "forestgreen", se = FALSE) + 
+  labs(x = latex2exp::TeX(r"($\textit{n}$)"), 
+       y = latex2exp::TeX(r"($|\textit{U_n} - \theta|$)")) + 
+  theme_classic(base_size = 14)
+```
+
+# Influence Functions 
+
+## Example 3.2 - *Zepeda-Tello, R. et al*
+
+This example is pulled from [The delta-method and influence function in medical statistics: A reproducible tutorial](https://doi.org/10.48550/arXiv.2206.15310), a preprint from June 2022. Section 3 includes several examples of asymptotic distributions of estimators derived using the functional delta method. Example 3.2 shows the derivation of the asymptotic distribution of the sample mean using the influence function instead of the Central Limit Theorem; they use a discrete distribution for simplicity, but here we'll use a continuous distribution instead. 
+
+We assume that observations are generated from the following distribution with mean $\mu$ and variance $\sigma^2$:
+
+$$
+X_1, \dots, X_n \overset{\small{\text{IID}}}{\sim} F
+$$
+
+The estimator can be formulated as a functional, with $\phi(\cdot)$ simply being the identity function:
+
+$$
+\begin{aligned}
+  \Psi 
+    &= \phi(\mathbb{P}_X) \\
+    &= \phi(\theta) \\
+    &= \mu \\
+  \widehat{\Psi}_n
+    &= \phi(\widehat{P}_X) \\
+    &= \phi(\hat{\theta}_n) \\
+    &= \bar{X}_n \\ 
+\end{aligned}
+$$
+
+Via a Taylor expansion, we have:
+
+$$
+\begin{aligned}
+\widehat{\Psi}_n &\approx \Psi + IF(X) \\
+\implies IF(X) &= \bar{X}_n - \mu + o_p(1) \\
+\end{aligned}
+$$
+
+The asymptotic distribution is as follows; we note that the expectation of the influence function is always equal to zero, and thus its variance is equal to its second raw moment. 
+
+$$
+\phi(\hat{\theta}_n - \theta) \overset{d}{\to} \mathcal{N} \left( 0,\: \text{Var} \left( IF(X) \right) \right)
+$$
+
+We derive the variance of the influence function, and obtain the same result as we would have in using the CLT:
+
+$$
+\begin{aligned}
+  \text{Var} \left( IF(X) \right)
+    &= \text{Var} \left( \bar{X}_n - \mu \right) \\
+    &= \text{Var} \left( n^{-1} \sum_{i=1}^n X_i \right) \\
+    &= n^{-2} \sum_{i=1}^n \text{Var}(X_i) \\
+    &= n^{-1}\sigma^2 \\
+\end{aligned}
+$$
+
+Thus the asymptotic distribution of the sample mean is:
+
+$$
+\sqrt{n} \left( \bar{X}_n - \mu \right) \overset{d}{\to} \mathcal{N}(0,\: \sigma^2)
+$$
+
+## Exercise 12.7 - *Asymptotic Statistics*
+
+I'm modifying this question slightly; the original asks for the asymptotic distribution of the U-statistic for $\mu^2$, and in addition we'll derive its joint distribution with the U-statistic for $m_2$ that we found previously using influence functions. 
+
+First, we define the given quantities:
+
+$$
+\begin{aligned}
+  X_1, \dots, X_n &\overset{\small{\text{IID}}}{\sim} F \\
+  \mathbb{E} \left[ X^2_1 \right] &< \infty \\
+\end{aligned}
+$$
+
+We define the following symmetric kernel to use in the U-statistic for $\mu^2$:
+
+$$
+h(X_1, X_2) = X_1X_2
+$$
+
+The expectation of that kernel is given by:
+
+$$
+\begin{aligned}
+  \mathbb{E} \left[ h(X_1, X_2) \right]
+    &= \mathbb{E}[X_1X_2] \\
+    &= \mathbb{E}[X_1]\mathbb{E}[X_2] \\
+    &= \mu^2 \\
+\end{aligned}
+$$
+
+The U-statistic is thus:
+
+$$
+U_n = \binom{n}{2}^{-1} \sum_{i=1}^n \sum_{i<j} X_iX_j
+$$
+
+Next we derive the asymptotic distribution of the U-statistic:
+
+$$
+\begin{aligned}
+  h_1(X_1, X_2)
+    &= \mathbb{E} \left[ h(X_1, X_2) | X_1 \right] \\
+    &= \mathbb{E}[X_1X_2 | X_1] \\
+    &= X_1\mu \\
+  \implies \zeta_1 
+    &= \mathbb{E} \left[ (h_1^c(X_1, X_2))^2 \right] \\
+    &= \mathbb{E} \left[(h_1(X_1, X_2) - \mu^2)^2 \right] \\
+    &= \text{Var}(h_1(X_1, X_2)) \\
+    &= \text{Var}(X_1\mu) \\
+    &= \mu^2\text{Var}(X_1) \\
+    &= \mu^2\sigma^2 \\
+  \implies \sqrt{n}(U_n - \mu^2) &\overset{d}{\to} \mathcal{N}(0,\: 4\mu^2\sigma^2)
+\end{aligned}
+$$
+
+The influence function of a U-statistic is given by:
+
+$$
+IF_U(X) = r h_1^c(X_1, \dots, X_r)
+$$
+
+Thus the influence function for our U-statistic is:
+
+$$
+IF_U(X) = 2\mu(X_1 - \mu)
+$$
+
+Remembering the U-statistic we derived earlier for $m_2$, which we'll now refer to as $U^*$ in order to distinguish it from the other statistic:
+
+$$
+U_n^* = \binom{n}{2}^{-1} \sum_{i=1}^n \sum_{i<j} \frac{(X_i - X_j)^2}{2} + X_iX_j
+$$
+
+We now define its influence function as:
+
+$$
+\begin{aligned}
+  IF_{U^*}(X) 
+    &= 2 \left( \frac{X_1^2 + m_2}{2} - m_2 \right) \\
+    &= X_1^2 - m_2 \\
+\end{aligned}
+$$
+
+Thus, the joint distribution of the two U-statistics is:
+
+$$
+\sqrt{n} \begin{pmatrix} U_n - \mu^2 \\ U_n^* - m_2 \end{pmatrix} 
+\overset{d}{\to} 
+\boldsymbol{\mathcal{N}}_2 \left(\mathbf{0},\: 
+  \begin{pmatrix} 
+    \text{Var} \left( IF_U \right) & \text{Cov} \left( IF_U, IF_{U^*} \right) \\
+    \text{Cov} \left( IF_U, IF_{U^*} \right) & \text{Var} \left( IF_{U^*} \right) \\
+  \end{pmatrix} \right)
+$$
+
+The variance of an influence function is equal to its second raw moment, as its first raw moment is always equal to zero. Ergo, the variances of the two U-statistics are as follows (they should match the asymptotic variances from earlier): 
+
+$$
+\begin{aligned}
+  \text{Var} \left( IF_U(X) \right)
+    &= \mathbb{E} \left[ IF_U(X)^2 \right] \\
+    &= \mathbb{E} \left[ (2\mu(X_1 - \mu))^2 \right] \\
+    &= \mathbb{E} \left[ 4\mu^2(X_1 - \mu)^2 \right] \\
+    &= 4\mu^2\sigma^2 \\
+  \implies \text{Var} \left( IF_{U^*}(X) \right)
+    &= \mathbb{E} \left[ (X_1^2 - m_2)^2 \right] \\
+    &= \text{Var} \left( X_1^2 \right) \\
+    &= \mathbb{E} \left[ (X_1^2)^2 \right] - \left( \mathbb{E} \left[ X_1^2 \right] \right)^2 \\
+    &= m_4 - m_2^2 \\
+\end{aligned}
+$$
+
+Lastly, the covariance term:
+
+$$
+\begin{aligned}
+  \text{Cov} \left( IF_U, IF_{U^*} \right)
+    &= \mathbb{E} \left[ IF_U IF_{U^*} \right] - \mathbb{E}[IF_U]\mathbb{E}[IF_{U^*}] \\
+    &= \mathbb{E} \left[ 2\mu(X_1 - \mu)(X_1 - m_2) \right] - \mathbb{E}[2\mu(X_1 - \mu)] \mathbb{E}[X_1 - m_2] \\
+    &= \mathbb{E}[2\mu(X_1^2 - X_1m_2 - \mu X_1 + \mu m_2)] - 2\mu \left( \mathbb{E}[X_1] - \mu \right)(\mu - m_2) \\
+    &= 2\mu(m_2 - \mu m_2 - \mu^2 + \mu m_2) \\
+    &= 2\mu(m_2 - \mu^2) \\
+\end{aligned}
+$$
+
+Thus we have arrived at the join asymptotic distribution:
+
+$$
+\sqrt{n} \begin{pmatrix} U_n - \mu^2 \\ U_n^* - m_2 \end{pmatrix} 
+\overset{d}{\to} 
+\boldsymbol{\mathcal{N}}_2 \left(\mathbf{0},\: 
+  \begin{pmatrix} 
+    4\mu^2\sigma^2 & 2\mu(m_2 - \mu^2) \\
+    2\mu(m_2 - \mu^2) & m_4 - m_2^2 \\
+  \end{pmatrix} \right)
+$$
+
+# Session Info 
+
+```{r}
+sessioninfo::session_info()
+```

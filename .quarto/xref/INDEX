@@ -25,5 +25,8 @@
   },
   "tutorials/GEE_Benchmarking.qmd": {
     "GEE_Benchmarking.html": "8019930f"
+  },
+  "derivations/Large_Sample_Practice.qmd": {
+    "Large_Sample_Practice.html": "c979edc4"
   }
 }

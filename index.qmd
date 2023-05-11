@@ -9,11 +9,11 @@ about:
       text: twitter
       href: https://twitter.com/leary_jack
     - icon: github
-      text: Github
+      text: GitHub
       href: https://github.com/jr-leary7
 ---
 
-I am a first-year PhD student at the University of Florida under Dr. Rhonda Bacher. My primary research interest are genomics and genetics, and particularly single cell RNA-seq computational method development. I mostly write tools related to clustering, trajectory inference, and differential expression analysis. In addition, I also focus on scientific reproducibility, computational scalability, and interpretable inference. 
+I am a first-year PhD student at the University of Florida under Dr. Rhonda Bacher. My primary research interest are genomics and genetics, and particularly single cell RNA-seq computational method development. I mostly develop tools related to clustering, trajectory inference, and differential expression analysis. In addition, I also focus on scientific reproducibility, computational scalability, and interpretable inference. 
 
 ----------
 
