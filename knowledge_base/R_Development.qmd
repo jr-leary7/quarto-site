@@ -62,6 +62,13 @@ This document houses a list of resources I've put together that have helped me i
 
 - [What They Forgot to Teach You About R](https://rstats.wtf/index.html)
   - This online book is less about package development & more about R's idiosyncrasies, but it contains a bunch of useful tips & tricks on how to make your code more reproducible & less brittle. The debugging section is clear & concise, and contains links to other, more detailed resources as well. 
+  
+# Interfacing with Other Languages
+- [`{reticulate}`](https://rstudio.github.io/reticulate/)
+  - Seamlessly interact with Python from your R session. Super easy to use & fairly full-featured, this package makes things like performing scRNA-seq analysis with both R & Python libraries a breeze. This package is developed by the team at RStudio & is actively maintained. 
+
+- [`{JuliaCall}`](https://github.com/cran/JuliaCall)
+  - Allows you to use `Julia` from within an R session. A great vignette can be found [here](https://hwborchers.github.io/). 
 
 # Miscellaneous 
 

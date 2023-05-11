@@ -1,6 +1,12 @@
 project:
   type: website
   output-dir: docs
+  render: 
+    - "*.qmd"
+    - "tutorials/*qmd"
+    - "derivations/*qmd"
+    - "knowledge_base/*qmd"
+    - "!tutorials/Seurat_AnnData_Conversion.qmd"
 
 website:
   title: "Jack Leary"
@@ -26,6 +32,7 @@ website:
       - text: "Derivations"
         menu:
           - derivations/Intercept_Interpretation.qmd
+          - derivations/Large_Sample_Practice.qmd
       - text: "Knowledge Base"
         menu: 
           - knowledge_base/scRNAseq.qmd
