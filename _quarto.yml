@@ -7,6 +7,7 @@ project:
     - "derivations/*qmd"
     - "knowledge_base/*qmd"
     - "!tutorials/Seurat_AnnData_Conversion.qmd"
+    - "!tutorials/Scaffold_Simulation.qmd"
 
 website:
   title: "Jack Leary"

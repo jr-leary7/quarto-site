@@ -1,5 +1,5 @@
 ---
-title: "Converting `Seurat` Objects to `AnnData` Objects for use in Python"
+title: "Converting From `Seurat` to `AnnData` for use in Python"
 author:
   name: Jack Leary
   email: j.leary@ufl.edu
