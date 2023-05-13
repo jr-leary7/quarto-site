@@ -40,7 +40,7 @@ library(ggplot2)  # plots
 
 ## Exercise 3.1 - *Asymptotic Statistics*
 
-This is exercise 3.1 from [van der Vaart's textbook](https://doi.org/10.1017/CBO9780511802256). The setup is as follows:
+This is exercise 3.1 from [A.W. van der Vaart's textbook](https://doi.org/10.1017/CBO9780511802256). The setup is as follows:
 
 $$
 \begin{aligned}
@@ -640,7 +640,7 @@ $$
 \end{aligned}
 $$
 
-Thus we have arrived at the join asymptotic distribution:
+Thus we have arrived at the joint asymptotic distribution:
 
 $$
 \sqrt{n} \begin{pmatrix} U_n - \mu^2 \\ U_n^* - m_2 \end{pmatrix} 
