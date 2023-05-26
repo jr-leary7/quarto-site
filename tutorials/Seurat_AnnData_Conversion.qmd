@@ -1,5 +1,5 @@
 ---
-title: "Converting From `Seurat` to `AnnData` for use in Python"
+title: "Converting scRNA-seq Datasets from `Seurat` to `AnnData`"
 author:
   name: Jack Leary
   email: j.leary@ufl.edu
@@ -25,7 +25,7 @@ execute:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(message = FALSE, warning = FALSE, comment = NA)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, comment = NA, fig.width = 9, fig.height = 6, fig.retina = TRUE)
 reticulate::use_virtualenv("~/Desktop/Python/science/venv/", required = TRUE)
 ```
 
@@ -73,7 +73,7 @@ plt.ion()
 
 # Data 
 
-First we'll load a dataset to analyze; I'm a fan of the neural development data from [La Manno *et al* (2016)](https://doi.org/10.1016/j.cell.2016.09.027) as a good example for trajectory / velocity methods. The dataset is available in the `{scRNAseq}` package, though we'll need to convert it from the default `SingleCellExperiment` format to `Seurat` first. 
+First we'll load a dataset to analyze; I'm a fan of the neural development data from [La Manno *et al* (2016)](https://doi.org/10.1016/j.cell.2016.09.027) as a good example for trajectory / velocity methods. The dataset is available in the `{scRNAseq}` package, though we'll need to convert it from the default `SingleCellExperiment` format to a `Seurat` object first. 
 
 ```{r}
 brain <- scRNAseq::LaMannoBrainData(which = "human-embryo")
@@ -137,7 +137,7 @@ brain <- brain %>%
                       verbose = FALSE)
 ```
 
-We'll also add & clean up the metadata by creating a cell age variable and sorting the fine celltype labels into slightly coarser categories for visualization. This data is mostly derived from [Figure 1](https://www.sciencedirect.com/science/article/pii/S0092867416313095?via%3Dihub#fig1) and [Supplementary Table 1](https://www.sciencedirect.com/science/article/pii/S0092867416313095?via%3Dihub#mmc1) in the La Manno paper. 
+We'll also add & clean up the metadata by creating a cell age variable and sorting the fine celltype labels into slightly coarser categories for visualization. This data is mostly derived from [Figure 1](https://www.sciencedirect.com/science/article/pii/S0092867416313095?via%3Dihub#fig1) and [Supplementary Table 1](https://www.sciencedirect.com/science/article/pii/S0092867416313095?via%3Dihub#mmc1) in the original paper. 
 
 ```{r}
 brain@meta.data <- mutate(brain@meta.data, 
@@ -258,7 +258,7 @@ if (!dir.exists("./conversion_files/")) {
 
 ### Raw Counts 
 
-First, we'll write the counts matrices to a sparse matrix market file, which can be read into Python via `scipy`. **Note**: the `AnnData` ecosystem is built around $\text{cell} \times \text{gene}$ counts matrices, which is transposed from how R-based single cell tools store them. Make sure to transpose them in either R or Python before creating an `AnnData` object. 
+First, we'll write the counts matrices to a sparse matrix market file, which can be read into Python via `scipy`. **Note**: the `AnnData` ecosystem is built around $\text{cell} \times \text{gene}$ counts matrices, which is transposed from how R-based single cell data structures store them. Make sure to transpose them in either R or Python before creating an `AnnData` object. 
 
 ```{r, results='hide'}
 Matrix::writeMM(brain@assays$RNA@counts, file = "./conversion_files/RNA_counts.mtx")
@@ -325,7 +325,7 @@ for (i in seq(ncol(brain))) {
 knn_dist_mat <- Matrix::sparseMatrix(i = row_idx, j = col_idx, x = X)
 ```
 
-Another tricky bit are the cell-level [connectivities.](https://scanpy.readthedocs.io/en/stable/generated/scanpy.Neighbors.html) This term is used pretty often in analyses done with `scanpy` and `scvelo`, but there isn't really a direct equivalent in R. In short, `scanpy` (and the other packages built on top of it) uses part of the UMAP algorithm to both compute the nearest-neighbor graph & embed the cells in one step, rather than computing the neighbors separately from the UMAP embedding as is done in R. More technically, `scanpy` borrows the computation of the [fuzzy simplicial set](https://umap-learn.readthedocs.io/en/latest/_modules/umap/umap_.html#fuzzy_simplicial_set) from UMAP, which is essentially a local approximation of the distances between points for a given distance metric (cosine, in our case). See [here](https://umap-learn.readthedocs.io/en/latest/how_umap_works.html), specifically the section entitled "Adapting to Real World Data", for many more details. 
+The trickiest bit is the cell-level [connectivities.](https://scanpy.readthedocs.io/en/stable/generated/scanpy.Neighbors.html) This term is used pretty often in analyses done with `scanpy` and `scvelo`, but there isn't really a direct equivalent in R. In short, `scanpy` (and the other packages built on top of it) uses part of the UMAP algorithm to both compute the nearest-neighbor graph & embed the cells in one step, rather than computing the neighbors separately from the UMAP embedding as is done in R. More technically, `scanpy` borrows the computation of the [fuzzy simplicial set](https://umap-learn.readthedocs.io/en/latest/_modules/umap/umap_.html#fuzzy_simplicial_set) from UMAP, which is essentially a local approximation of the distances between points for a given distance metric (cosine, in our case). See [here](https://umap-learn.readthedocs.io/en/latest/how_umap_works.html), specifically the section entitled "Adapting to Real World Data", for many more details. 
 
 Since the UMAP embeddings you get from `{Seurat}` & `scanpy` will differ somewhat because of differences in their underlying implementations, we'd like to be able to extract the connectivities from our pre-computed embedding and bring them in Python, instead of recomputing them with `scanpy` and thus having a set of neighbors that doesn't exactly correspond to our UMAP. We can do this by refitting the UMAP model using the exact settings that we did when running it through the `{Seurat}` wrapper function, but this time we specify the parameter `ret_extra = c("fgraph")`, which indicates that the fuzzy simplicial set matrix should be returned. Some of the parameters aren't stored in the returned `uwot` model, so we need to set them manually. The only tricky one is the initialization; `RunUMAP()` uses the spectral (normalized Laplacian plus Gaussian noise) initialization as of the time of writing. **Note**: make sure to use the same random seed as you did when calling `RunUMAP()` originally. 
 
@@ -367,11 +367,11 @@ We read our data into Python, & do some necessary reformatting.
 
 ```{python}
 # raw counts 
-RNA_counts = mmread('./conversion_files/RNA_counts.mtx').transpose().tocsr()
+RNA_counts = mmread('./conversion_files/RNA_counts.mtx').transpose().tocsr().astype('float64')
 # cell metadata
 cell_metadata = pd.read_csv('./conversion_files/cell_metadata.csv').rename(columns={'Cell_ID': 'cell'}).set_index('cell', drop=False)
 cell_metadata['seurat_clusters'] = cell_metadata['seurat_clusters'].astype('category')
-cell_metadata['age'] = pd.Categorical(cell_metadata['age'], categories=['6', '7', '8', '9', '10', '11'])
+cell_metadata['age'] = pd.Categorical(cell_metadata['age'].astype('str'), categories=['6', '7', '8', '9', '10', '11'])
 cat_cols = ['broad_celltype', 'Phase', 'Cell_type']
 cell_metadata[cat_cols] = cell_metadata[cat_cols].apply(lambda x: pd.Categorical(x, categories=list(dict.fromkeys(sorted(x, key=str.lower)))))
 cell_names = pd.read_csv('./conversion_files/cells.csv').set_index('cell', drop=False)
@@ -394,10 +394,10 @@ layers_dict = {'RNA': RNA_counts}
 dimred_dict = {'X_pca': pca_embedding, 'X_umap': umap_embedding}
 graph_dict = {'distances': knn_dist_mat, 'connectivities': knn_conn_mat}
 uns_dict = {
-    'broad_celltype_colors': np.array(r.palette_celltype), 
-    'seurat_clusters_colors': np.array(r.palette_cluster), 
-    'age_colors': np.array(r.palette_age), 
-    'Phase_colors': np.array(r.palette_cc), 
+    'broad_celltype_colors': np.array(r.palette_celltype[0:13]), 
+    'seurat_clusters_colors': np.array(r.palette_cluster[0:7]), 
+    'age_colors': np.array(r.palette_age[0:7]), 
+    'Phase_colors': np.array(r.palette_cc[0:3]), 
     'neighbors': {
         'connectivities_key': 'connectivities', 
         'distances_key': 'distances', 
@@ -443,12 +443,12 @@ ax.spines['bottom'].set_linewidth(1.5)
 ax.spines['left'].set_linewidth(1.5)
 ax.set_xlabel('UMAP 1')
 ax.set_ylabel('UMAP 2')
-ax.set_title(label='UMAP Embeddings from Seurat', loc='left')
+ax.set_title(label='UMAP Embedding from Seurat', loc='left')
 plt.gcf().set_dpi(320)
 plt.show()
 ```
 
-Now we can proceed with a typical downstream analysis using `scanpy`. In this case, we'll start by estimating a graph abstraction using `PAGA`. 
+Now we can proceed with a typical downstream analysis using the `scanpy` library. After processing the cells, we estimate a force-directed graph embedding and then a diffusion map embedding, which we'll use to estimate pseudotime. 
 
 ```{python}
 sc.pp.filter_genes_dispersion(adata, flavor='seurat', n_top_genes=3000)
@@ -478,34 +478,64 @@ plt.gcf().set_dpi(320)
 plt.show()
 ```
 
-```{python}
-sc.pl.paga_compare(adata, color='broad_celltype')
-```
+We assign a root cell belonging to the progenitor population, then estimate diffusion pseudotime for each cell, and finally plot the results with our diffusion map embedding. 
 
 ```{python}
 adata.uns['iroot'] = np.flatnonzero(adata.obs['broad_celltype']  == 'Progenitor')[0]
 sc.tl.dpt(adata)
-sc.tl.paga(adata, groups='fine_celltype')
-sc.pl.paga(adata, color='broad_celltype')
-```
-
-
-```{python}
-sc.tl.paga(adata, groups='broad_celltype')
-sc.pl.paga_compare(adata, color='broad_celltype')
-```
-
-```{python}
-sc.pl.scatter(
+ax = sc.pl.scatter(
   adata, 
-  color='broad_celltype', 
-  edges=True
+  color='dpt_pseudotime', 
+  basis='diffmap', 
+  title='', 
+  color_map='gnuplot', 
+  legend_fontsize=10, 
+  show=False
 )
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.spines['bottom'].set_linewidth(1.5)
+ax.spines['left'].set_linewidth(1.5)
+ax.set_xlabel('DC 1')
+ax.set_ylabel('DC 2')
+ax.set_title(label='Diffusion Pseudotime', loc='left')
+plt.gcf().set_dpi(320)
+plt.show()
+```
+
+When plotting the distribution of diffusion pseudotime for each coarse celltype, we see that more immature celltypes such as progenitors have lower values, whereas more mature celltypes like endothelial cells & microglia have larger values. This indicates that our DPT estimate is a decent proxy for progression through the underlying biological process. 
+
+```{python}
+violin_order = pd.DataFrame(adata.obs[['broad_celltype', 'dpt_pseudotime']]) \
+                 .groupby('broad_celltype')['dpt_pseudotime'] \
+                 .mean().sort_values(ascending=True) \
+                 .index.tolist()
+ax = sc.pl.violin(
+  adata, 
+  keys='dpt_pseudotime', 
+  groupby='broad_celltype', 
+  frameon=True, 
+  order=violin_order, 
+  show=False, 
+  inner='box',
+  scale='width', 
+  stripplot=False
+)
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+ax.spines['bottom'].set_linewidth(1.5)
+ax.spines['left'].set_linewidth(1.5)
+ax.set_ylabel('Diffusion Pseudotime')
+ax.set_xlabel(None)
+ax.set_xticklabels(violin_order, rotation=45, ha='right')
+ax.set_position([0.1, 0.325, 0.8, 0.65]) 
+plt.gcf().set_dpi(320)
+plt.show()
 ```
 
 ## File Cleanup
 
-Lastly, we'll remove the temporary directory we used to store our data while converting it all to `AnnData`. Be careful when using `rm -rf`!
+Lastly, we'll remove the temporary directory we used to store our data while converting it all to `AnnData`. **Note**: always be super careful when using `rm -rf`!
 
 ```{r}
 if (dir.exists("./conversion_files")) {
@@ -513,8 +543,70 @@ if (dir.exists("./conversion_files")) {
 }
 ```
 
+## Returning Results to R
+
+We'll quickly pull the diffusion pseudotime estimate for each cell back into R using `{reticulate}`, and add it to our `Seurat` object:
+
+```{r}
+dpt_est <- py$adata$obs$dpt_pseudotime
+names(dpt_est) <- py$adata$obs$cell
+brain <- AddMetaData(brain, metadata = dpt_est, col.name = "scanpy_dpt")
+```
+
+We can plot the DPT estimates on our UMAP embedding:
+
+```{r}
+FeaturePlot(brain, 
+            features = "scanpy_dpt", 
+            pt.size = 1) + 
+  scale_color_gradientn(colours = viridisLite::inferno(n = 20), 
+                        labels = scales::label_number(accuracy = .1)) + 
+  labs(x = "UMAP 1",
+       y = "UMAP 2",
+       title = "Diffusion Pseudotime", 
+       subtitle = "Estimated using Scanpy") + 
+  theme_umap()
+```
+
+We can also visualize gene dynamics over pseudotime for a few genes of interest. For example, we see that fibronectin 1 (FN1) is highly expressed towards the end of the biological process, specifically in pericyte & endothelial cells. These two celltypes form part of the blood-brain barrier, & are closely related to one another ([source](https://en.wikipedia.org/wiki/Pericyte#Blood–brain_barrier)). 
+
+```{r, fig.width=12}
+data.frame(cell = colnames(brain), 
+           celltype = brain$broad_celltype, 
+           dpt = brain$scanpy_dpt, 
+           LGALS1 = GetAssayData(brain, "data")["LGALS1", ], 
+           COL4A1 = GetAssayData(brain, "data")["COL4A1", ], 
+           RGS5 = GetAssayData(brain, "data")["RGS5", ], 
+           FN1 = GetAssayData(brain, "data")["FN1", ]) %>% 
+  tidyr::pivot_longer(cols = !c(cell, celltype, dpt), 
+                      names_to = "gene", 
+                      values_to = "expression") %>% 
+  ggplot(aes(x = dpt, y = expression)) + 
+  facet_wrap(~gene, ncol = 2, nrow = 2) + 
+  geom_point(aes(color = celltype), 
+             size = 1, 
+             alpha = 0.75) + 
+  geom_smooth(method = "gam", 
+              se = FALSE, 
+              linewidth = 1.25, 
+              color = "black") + 
+  scale_x_continuous(labels = scales::label_number(accuracy = .1)) + 
+  scale_y_continuous(limits = c(0, NA), labels = scales::label_number(accuracy = 1)) + 
+  scale_color_manual(values = palette_celltype) + 
+  labs(x = "Diffusion Pseudotime", 
+       y = "Expression", 
+       title = "Pseudotemporal Gene Dynamics During Human Embryonic Neurogenisis", 
+       caption = "Pseudotime estimated using scanpy") + 
+  theme_classic(base_size = 14) + 
+  theme(plot.caption = element_text(size = 11, face = "italic"), 
+        legend.title = element_blank(), 
+        strip.text.x = element_text(face = "bold")) + 
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 4)))
+```
+
 # Conclusions 
 
+With the `{reticulate}` package it's relatively easy to pass data back and forth between R & Python in order to take advantage of tools & workflows that are only available in one of the two languages. For larger files, or those for which datatype conversion is necessary, writing to disk for conversion is helpful as well. For more information, check out [the `{reticulate}` documentation](https://rstudio.github.io/reticulate/index.html) and [the `Scanpy` documentation](https://scanpy.readthedocs.io/en/stable/). 
 
 # Session Info 
 
