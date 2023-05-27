@@ -65,7 +65,7 @@ from scipy.sparse import csr_matrix  # sparse matrices
 
 We tweak our `matplotlib` settings to match `ggplot2::theme_classic()`, which is my preferred theme. 
 
-```{python}
+```{python, results='hide'}
 gg_theme = theme_classic()
 plt.rcParams.update(gg_theme.rcParams)
 plt.ion()
@@ -504,7 +504,7 @@ plt.show()
 ```
 
 When plotting the distribution of diffusion pseudotime for each coarse celltype, we see that more immature celltypes such as progenitors have lower values, whereas more mature celltypes like endothelial cells & microglia have larger values. This indicates that our DPT estimate is a decent proxy for progression through the underlying biological process. 
-
+ 
 ```{python}
 violin_order = pd.DataFrame(adata.obs[['broad_celltype', 'dpt_pseudotime']]) \
                  .groupby('broad_celltype')['dpt_pseudotime'] \
@@ -527,8 +527,8 @@ ax.spines['bottom'].set_linewidth(1.5)
 ax.spines['left'].set_linewidth(1.5)
 ax.set_ylabel('Diffusion Pseudotime')
 ax.set_xlabel(None)
-ax.set_xticklabels(violin_order, rotation=45, ha='right')
-ax.set_position([0.1, 0.325, 0.8, 0.65]) 
+ax.set_xticklabels(violin_order, rotation=40, ha='right')
+ax.set_position([0.1, 0.375, 0.85, 0.575]) 
 plt.gcf().set_dpi(320)
 plt.show()
 ```
@@ -545,12 +545,19 @@ if (dir.exists("./conversion_files")) {
 
 ## Returning Results to R
 
-We'll quickly pull the diffusion pseudotime estimate for each cell back into R using `{reticulate}`, and add it to our `Seurat` object:
+We'll quickly pull the diffusion pseudotime estimate for each cell back into R using `{reticulate}`, and add it to our `Seurat` object. We also add the diffusion map embedding to the `reductions` slot in the object. 
 
 ```{r}
 dpt_est <- py$adata$obs$dpt_pseudotime
 names(dpt_est) <- py$adata$obs$cell
 brain <- AddMetaData(brain, metadata = dpt_est, col.name = "scanpy_dpt")
+diffmap_embed <- py$adata$obsm["X_diffmap"]
+rownames(diffmap_embed) <- colnames(brain)
+colnames(diffmap_embed) <- paste0("DC_", c(1:ncol(diffmap_embed)))
+brain@reductions$diffmap <- CreateDimReducObject(embeddings = diffmap_embed, 
+                                                 assay = "RNA", 
+                                                 key = "DC_", 
+                                                 global = TRUE)
 ```
 
 We can plot the DPT estimates on our UMAP embedding:
@@ -558,6 +565,7 @@ We can plot the DPT estimates on our UMAP embedding:
 ```{r}
 FeaturePlot(brain, 
             features = "scanpy_dpt", 
+            reduction = "umap", 
             pt.size = 1) + 
   scale_color_gradientn(colours = viridisLite::inferno(n = 20), 
                         labels = scales::label_number(accuracy = .1)) + 
@@ -596,7 +604,7 @@ data.frame(cell = colnames(brain),
   labs(x = "Diffusion Pseudotime", 
        y = "Expression", 
        title = "Pseudotemporal Gene Dynamics During Human Embryonic Neurogenisis", 
-       caption = "Pseudotime estimated using scanpy") + 
+       caption = "Pseudotime estimated using Scanpy") + 
   theme_classic(base_size = 14) + 
   theme(plot.caption = element_text(size = 11, face = "italic"), 
         legend.title = element_blank(), 
