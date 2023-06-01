@@ -1,0 +1,64 @@
+---
+title: "Benchmarking Negative Binomial GLMM Model Backends"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    embed-resources: true
+    fig-format: retina
+    df-print: kable
+    link-external-newwindow: true
+execute:
+  cache: true
+  freeze: auto
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, comment = NA)
+```
+
+# Introduction 
+
+In transcriptomics projects researchers often use the negative binomial distribution to model mRNA abundance, as it allows for overdispersion in the counts while the Poisson distribution does not ([source]()). As part of an ongoing computational method development project I previously benchmarked a few of the available software libraries that can estimate negative binomial generalized estimating equations models; the results can be found [here](https://jr-leary7.github.io/quarto-site/tutorials/GEE_Benchmarking.html). While GEEs are pretty useful, they only provide a population-level fit. When faced with complex, multi-subject experimental designs, a population-level fit sometimes fails to provide adequate inference. In such situations generalized linear mixed models can be incredibly useful, as they allow for both population- and subject-level inference. The downside is that these models sometimes have convergence issues, and are less straightforwardly interpretable than GEEs, which generally carry the same easy interpretation as classical GLMs. In addition, not every software implementation supports every distribution, and multi-parameter distributions like the negative binomial are less commonly-supported than simpler distributions such as the Poisson. Here we'll examine the available options for fitting negative binomial GLMMs in R, Python, & Julia, and evaluate both their computational speed & inferential performance. 
+
+# Libraries 
+
+## R 
+
+```{r, results='hide'}
+library(dplyr)       # data manipulation
+library(ggplot2)     # plots 
+library(JuliaCall)   # call Julia from R
+library(reticulate)  # call Python from R
+```
+
+## Python
+
+We'll call the Python code from R using `{reticulate}`, but we'll need to make sure to use the virtual environment I set up previously that has the `statsmodels` and `pandas` libraries (and their various dependencies) installed. 
+
+```{r, results='hide'}
+use_virtualenv("~/Desktop/Python/science/venv/", required = TRUE)
+sm <- import("statsmodels.api")
+pd <- import("pandas")
+```
+
+## Julia 
+
+We'll also need to activate a Julia environment, into which I've installed the [`MixedModels.jl` package](https://juliastats.org/MixedModels.jl/stable/) and its necessary dependencies.
+
+```{r, results='hide'}
+julia_setup(verbose = FALSE)
+julia_command('using Pkg; Pkg.activate("/Users/jack/Desktop/Julia/science/");')
+julia_command("using Distributions, GLM, MixedModels, DataFrames;")
+```

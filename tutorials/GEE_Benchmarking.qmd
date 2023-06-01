@@ -57,7 +57,7 @@ pd <- import("pandas")
 
 ## Julia 
 
-We'll also need to activate a Julia environment, into which I've installed the [GEE.jl package](https://github.com/kshedden/GEE.jl/tree/main) and its necessary dependencies. 
+We'll also need to activate a Julia environment, into which I've installed the [`GEE.jl` package](https://github.com/kshedden/GEE.jl/tree/main) and its necessary dependencies. 
 
 ```{r, results='hide'}
 julia_setup(verbose = FALSE)
