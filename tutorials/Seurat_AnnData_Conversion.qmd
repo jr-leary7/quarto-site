@@ -3,6 +3,7 @@ title: "Converting scRNA-seq Datasets from `Seurat` to `AnnData`"
 author:
   name: Jack Leary
   email: j.leary@ufl.edu
+  orcid: 0009-0004-8821-3269
   affiliations:
     - name: University of Florida
       department: Biostatistics 
@@ -31,7 +32,7 @@ reticulate::use_virtualenv("~/Desktop/Python/science/venv/", required = TRUE)
 
 # Introduction 
 
-if you're like me, you switch between using R & Python pretty frequently. Despite all the hype, single cell is still a relatively nascent field, and not every method is implemented in both languages. For example: if you want to run an RNA velocity analysis you're probably going to need to use Python, but when it comes to making figures for your publication it's generally easier to go back to R and use `{ggplot2}`. Whatever the motivation, it's useful to be able to seamlessly switch between programming environments - though doing so isn't always easy.
+if you're like me, you switch between using R & Python pretty frequently. Despite all the hype, single cell is still a relatively nascent field, and not every method is implemented in both languages. For example: if you want to run an RNA velocity analysis you're probably going to need to use Python, but when it comes to making figures for your publication it's generally easier to go back to R and use `ggplot2`. Whatever the motivation, it's useful to be able to seamlessly switch between programming environments - though doing so isn't always easy.
 
 There are several libraries that facilitate conversions from R-based scRNA-seq data structures (typically `SingleCellExperiment` or `Seurat` objects) to Python-based ones (`AnnData` and `loom` being the most common formats). I'm aware of [`{zellkonverter}`](https://theislab.github.io/zellkonverter/), [`{SeuratDisk}`](https://mojaveazure.github.io/seurat-disk/), [`{anndata2ri}`](https://icb-anndata2ri.readthedocs-hosted.com/en/latest/), [`{loomR}`](https://github.com/mojaveazure/loomR), & [`{sceasy}`](https://github.com/cellgeni/sceasy). While these packages generally work fairly well, they don't always transfer every piece of data that you need, and reading through the source code to try & figure out why your objects are incomplete can take up a lot of time. In addition, some of the more niche / less used dataset attributes are often undocumented or poorly-documented in conversion packages, making it difficult to identify how the data types correspond between formats. As such, sometimes it's necessary to get through the conversion on your own. This vignette will hopefully make doing so a bit easier by detailing the equivalencies across packages between different types of counts matrices, metadata, graphs, & more. We'll focus on converting directly from `Seurat` to `AnnData`, since converting between formats within the same language e.g., `AnnData` to `loom` or `SingleCellExperiment` to `Seurat` is generally easier & much better-documented. 
 
@@ -73,7 +74,7 @@ plt.ion()
 
 # Data 
 
-First we'll load a dataset to analyze; I'm a fan of the neural development data from [La Manno *et al* (2016)](https://doi.org/10.1016/j.cell.2016.09.027) as a good example for trajectory / velocity methods. The dataset is available in the `{scRNAseq}` package, though we'll need to convert it from the default `SingleCellExperiment` format to a `Seurat` object first. 
+First we'll load a dataset to analyze; I'm a fan of the neural development data from [La Manno *et al* (2016)](https://doi.org/10.1016/j.cell.2016.09.027) as a good example for trajectory / velocity methods. The dataset is available in the `scRNAseq` package, though we'll need to convert it from the default `SingleCellExperiment` format to a `Seurat` object first. 
 
 ```{r}
 brain <- scRNAseq::LaMannoBrainData(which = "human-embryo")
@@ -166,7 +167,7 @@ brain@meta.data <- mutate(brain@meta.data,
                           broad_celltype = as.factor(broad_celltype))
 ```
 
-Let's visualize the results. First, we'll define a color palette for each of our key metadata features using the `{paletteer}` package. 
+Let's visualize the results. First, we'll define a color palette for each of our key metadata features using the `paletteer` package. 
 
 ```{r}
 palette_cluster <- paletteer_d("ggsci::nrc_npg")
@@ -248,7 +249,7 @@ p3 <- DimPlot(brain,
 
 Having done all this preprocessing already, when using tools in Python we'd ideally like to be able to keep our clustering, annotations, embeddings, etc. as they are instead of recomputing them with `scanpy`. That isn't a terrible worst option of course, but it's pretty much impossible to get the results of stochastic algorithms such as Leiden clustering and UMAP, and even simpler ones like HVG identification to agree when using differing implementations of differing methods. With that in mind, let's port our results to Python! 
 
-**Note**: there's essentially two ways to do this; the first relies on the usage of RMarkdown & `{reticulate}`, which allows you to pass objects back & forth between languages. The second, more general method is to write the data to common file formats from R, then read them in with Python & clean up the files afterwards. We'll show examples of both options, but the best general-practice method is the file-based way. We'll set up a temporary directory for the conversion files now, then remove it after we're done. 
+**Note**: there's essentially two ways to do this; the first relies on the usage of RMarkdown & `reticulate`, which allows you to pass objects back & forth between languages. The second, more general method is to write the data to common file formats from R, then read them in with Python & clean up the files afterwards. We'll show examples of both options, but the best general-practice method is the file-based way. We'll set up a temporary directory for the conversion files now, then remove it after we're done. 
 
 ```{r}
 if (!dir.exists("./conversion_files/")) {
@@ -266,7 +267,7 @@ Matrix::writeMM(brain@assays$RNA@counts, file = "./conversion_files/RNA_counts.m
 
 ### Cell & Gene Metadata
 
-We'll use CSVs to store the metadata for our cells & genes; these can be read into Python using `pandas`. The `{biomaRt}` package allows us to pull an Ensembl ID & biotype for each gene in our dataset, which we save as well. 
+We'll use CSVs to store the metadata for our cells & genes; these can be read into Python using `pandas`. The `biomaRt` package allows us to pull an Ensembl ID & biotype for each gene in our dataset, which we save as well. 
 
 ```{r}
 readr::write_csv(brain@meta.data,
@@ -322,12 +323,14 @@ for (i in seq(ncol(brain))) {
   X[(knn_param * i - (knn_param - 1)):(knn_param * i)] <- brain@neighbors$RNA.nn@nn.dist[i, ]
   
 }
-knn_dist_mat <- Matrix::sparseMatrix(i = row_idx, j = col_idx, x = X)
+knn_dist_mat <- Matrix::sparseMatrix(i = row_idx, 
+                                     j = col_idx, 
+                                     x = X)
 ```
 
 The trickiest bit is the cell-level [connectivities.](https://scanpy.readthedocs.io/en/stable/generated/scanpy.Neighbors.html) This term is used pretty often in analyses done with `scanpy` and `scvelo`, but there isn't really a direct equivalent in R. In short, `scanpy` (and the other packages built on top of it) uses part of the UMAP algorithm to both compute the nearest-neighbor graph & embed the cells in one step, rather than computing the neighbors separately from the UMAP embedding as is done in R. More technically, `scanpy` borrows the computation of the [fuzzy simplicial set](https://umap-learn.readthedocs.io/en/latest/_modules/umap/umap_.html#fuzzy_simplicial_set) from UMAP, which is essentially a local approximation of the distances between points for a given distance metric (cosine, in our case). See [here](https://umap-learn.readthedocs.io/en/latest/how_umap_works.html), specifically the section entitled "Adapting to Real World Data", for many more details. 
 
-Since the UMAP embeddings you get from `{Seurat}` & `scanpy` will differ somewhat because of differences in their underlying implementations, we'd like to be able to extract the connectivities from our pre-computed embedding and bring them in Python, instead of recomputing them with `scanpy` and thus having a set of neighbors that doesn't exactly correspond to our UMAP. We can do this by refitting the UMAP model using the exact settings that we did when running it through the `{Seurat}` wrapper function, but this time we specify the parameter `ret_extra = c("fgraph")`, which indicates that the fuzzy simplicial set matrix should be returned. Some of the parameters aren't stored in the returned `uwot` model, so we need to set them manually. The only tricky one is the initialization; `RunUMAP()` uses the spectral (normalized Laplacian plus Gaussian noise) initialization as of the time of writing. **Note**: make sure to use the same random seed as you did when calling `RunUMAP()` originally. 
+Since the UMAP embeddings you get from `Seurat` & `scanpy` will differ somewhat because of differences in their underlying implementations, we'd like to be able to extract the connectivities from our pre-computed embedding and bring them in Python, instead of recomputing them with `scanpy` and thus having a set of neighbors that doesn't exactly correspond to our UMAP. We can do this by refitting the UMAP model using the exact settings that we did when running it through the `Seurat` wrapper function, but this time we specify the parameter `ret_extra = c("fgraph")`, which indicates that the fuzzy simplicial set matrix should be returned. Some of the parameters aren't stored in the returned `uwot` model, so we need to set them manually. The only tricky one is the initialization; `RunUMAP()` uses the spectral (normalized Laplacian plus Gaussian noise) initialization as of the time of writing. **Note**: make sure to use the same random seed as you did when calling `RunUMAP()` originally. 
 
 ```{r}
 set.seed(312)
@@ -507,8 +510,8 @@ When plotting the distribution of diffusion pseudotime for each coarse celltype,
  
 ```{python}
 violin_order = pd.DataFrame(adata.obs[['broad_celltype', 'dpt_pseudotime']]) \
-                 .groupby('broad_celltype')['dpt_pseudotime'] \
-                 .mean().sort_values(ascending=True) \
+                 .groupby('broad_celltype')['dpt_pseudotime'].mean() \
+                 .sort_values(ascending=True) \
                  .index.tolist()
 ax = sc.pl.violin(
   adata, 
@@ -545,7 +548,7 @@ if (dir.exists("./conversion_files")) {
 
 ## Returning Results to R
 
-We'll quickly pull the diffusion pseudotime estimate for each cell back into R using `{reticulate}`, and add it to our `Seurat` object. We also add the diffusion map embedding to the `reductions` slot in the object. 
+We'll quickly pull the diffusion pseudotime estimate for each cell back into R using `reticulate`, and add it to our `Seurat` object. We also add the diffusion map embedding to the `reductions` slot in the object. 
 
 ```{r}
 dpt_est <- py$adata$obs$dpt_pseudotime
@@ -603,7 +606,7 @@ data.frame(cell = colnames(brain),
   scale_color_manual(values = palette_celltype) + 
   labs(x = "Diffusion Pseudotime", 
        y = "Expression", 
-       title = "Pseudotemporal Gene Dynamics During Human Embryonic Neurogenisis", 
+       title = "Pseudotemporal Gene Dynamics During Human Embryonic Neurogenesis", 
        caption = "Pseudotime estimated using Scanpy") + 
   theme_classic(base_size = 14) + 
   theme(plot.caption = element_text(size = 11, face = "italic"), 
@@ -614,7 +617,7 @@ data.frame(cell = colnames(brain),
 
 # Conclusions 
 
-With the `{reticulate}` package it's relatively easy to pass data back and forth between R & Python in order to take advantage of tools & workflows that are only available in one of the two languages. For larger files, or those for which datatype conversion is necessary, writing to disk for conversion is helpful as well. For more information, check out [the `{reticulate}` documentation](https://rstudio.github.io/reticulate/index.html) and [the `Scanpy` documentation](https://scanpy.readthedocs.io/en/stable/). 
+With the `reticulate` package it's relatively easy to pass data back and forth between R & Python in order to take advantage of tools & workflows that are only available in one of the two languages. For larger files, or those for which datatype conversion is necessary, writing to disk for conversion is helpful as well. For more information, check out [the `reticulate` documentation](https://rstudio.github.io/reticulate/index.html) and [the `scanpy` documentation](https://scanpy.readthedocs.io/en/stable/). 
 
 # Session Info 
 
