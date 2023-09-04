@@ -1,14 +1,16 @@
 ---
-title: "Interpretable scRNA-seq Trajectory DE with `{scLANE}`"
+title: "Interpretable scRNA-seq Trajectory DE with `scLANE`"
 author:
   name: Jack Leary
   email: j.leary@ufl.edu
+  orcid: 0009-0004-8821-3269
   affiliations:
     - name: University of Florida
       department: Biostatistics 
       city: Gainesville
       state: FL
-date: "`r Sys.Date()`"
+date: today
+date-format: long
 format:
   html:
     code-fold: show
@@ -33,11 +35,11 @@ reticulate::use_virtualenv("~/Desktop/Python/science/venv/", required = TRUE)
 
 # Introduction 
 
-In this tutorial we'll walk through a basic trajectory differential expression analysis. We'll use the `{scLANE}` package, which we developed with the goal of providing accurate and biologically interpretable models of expression over the course of a biological process. At the end are a list of references we used in developing the method & writing the accompanying manuscript, as well as the poster I presented at [ENAR 2023](https://www.enar.org/meetings/spring2023/) in Nashville.
+In this tutorial we'll walk through a basic trajectory differential expression analysis. We'll use the `scLANE` R package, which we developed with the goal of providing accurate and biologically interpretable models of expression over pseudotime. At the end are a list of references we used in developing the method & writing the accompanying manuscript, as well as the poster I presented at [ENAR 2023](https://www.enar.org/meetings/spring2023/) in Nashville.
 
 # Libraries 
 
-If you haven't already, install the development version (currently v`r packageVersion("scLANE")`) of `{scLANE}` from [the GitHub repository](https://github.com/jr-leary7/scLANE).
+If you haven't already, install the development version (currently v`r packageVersion("scLANE")`) of `scLANE` from [the GitHub repository](https://github.com/jr-leary7/scLANE).
 
 ```{r, eval=FALSE}
 remotes::install_github("jr-leary7/scLANE")
@@ -49,7 +51,7 @@ Next, we'll load the packages we need to process, analyze, & visualize our data.
 library(dplyr)           # data manipulation
 library(scLANE)          # trajectory DE 
 library(Seurat)          # scRNA-seq tools
-library(ggplot2)         # plot utilities 
+library(ggplot2)         # plot creation 
 library(patchwork)       # plot combination
 library(slingshot)       # pseudotime estimation
 library(reticulate)      # Python interface
@@ -97,7 +99,9 @@ The `AnnData` object contains data that we'll need to extract, specifically the 
 adata
 ```
 
-The `{reticulate}` package allows us to pass the counts matrices & metadata from Python back to R. We'll use the spliced mRNA counts as our default assay, and also define a new assay containing the total (spliced + unspliced) mRNA in each cell. Lastly, we remove genes with non-zero spliced mRNA in 3 or fewer cells. **Note**: while downloading this dataset requires a Python installation as well as the installation of the `scVelo` Python library (and its dependencies), running `{scLANE}` is done purely in R & requires no Python whatsoever. 
+## Conversion from Python
+
+The `reticulate` package allows us to pass the counts matrices & metadata from Python back to R. We'll use the spliced mRNA counts as our default assay, and also define a new assay containing the total (spliced + unspliced) mRNA in each cell. Lastly, we remove genes with non-zero spliced mRNA in 3 or fewer cells. **Note**: while downloading this dataset requires a Python installation as well as the installation of the `scVelo` Python library (and its dependencies), running `scLANE` is done purely in R & requires no Python whatsoever. 
 
 ```{r}
 spliced_counts <- Matrix::Matrix(t(as.matrix(py$adata$layers["spliced"])), sparse = TRUE)
@@ -126,7 +130,7 @@ seu <- CreateSeuratObject(counts = spliced_assay,
                           project = "Mm_Panc_Endo", 
                           meta.data = meta_data)
 seu@assays$unspliced <- unspliced_assay
-seu@assays$rna <- rna_assay
+seu@assays$RNA <- rna_assay
 seu <- seu[rowSums(seu@assays$spliced) > 3, ]
 ```
 
@@ -135,7 +139,9 @@ system("rm -rf ./data")  # remove data/ directory created by downloading pancrea
 rm(meta_data, rna_assay, rna_counts, spliced_assay, spliced_counts, unspliced_assay, unspliced_counts)
 ```
 
-We preprocess the counts using a typical pipeline with QC, normalization, linear & nonlinear dimension reduction, and graph-based clustering via the Leiden algorithm. 
+## Preprocessing
+
+We preprocess the counts using a typical pipeline with QC, normalization & scaling, dimension reduction, and graph-based clustering via the Leiden algorithm. 
 
 ```{r, message=FALSE, warning=FALSE}
 seu <- PercentageFeatureSet(seu, 
@@ -147,7 +153,7 @@ seu <- PercentageFeatureSet(seu,
                             assay = "spliced") %>% 
        NormalizeData(assay = "spliced", verbose = FALSE) %>% 
        NormalizeData(assay = "unspliced", verbose = FALSE) %>% 
-       NormalizeData(assay = "rna", verbose = FALSE) %>% 
+       NormalizeData(assay = "RNA", verbose = FALSE) %>% 
        FindVariableFeatures(assay = "spliced", 
                             nfeatures = 3000, 
                             verbose = FALSE) %>% 
@@ -172,6 +178,7 @@ seu <- PercentageFeatureSet(seu,
                      annoy.metric = "cosine", 
                      verbose = FALSE) %>% 
        FindClusters(algorithm = 4, 
+                    method = "igraph", 
                     resolution = 0.5, 
                     random.seed = 312, 
                     verbose = FALSE)
@@ -211,13 +218,13 @@ p2
 
 ## Pseudotime Estimation
 
-We'll start by fitting a trajectory using the `{slingshot}` R package. We define cluster 4 as the starting cluster, since in this case we're already aware of the dataset's underlying biology. After generating the estimates for each cell, we rescale the ordering to be defined on $[0, 1]$. This has no effect on the trajectory DE results however, and is mostly an aesthetic choice. 
+We'll start by fitting a trajectory using the `slingshot` R package. We define cluster 4 as the starting cluster, since in this case we're already aware of the dataset's underlying biology. After generating the estimates for each cell, we rescale the ordering to be defined on $[0, 1]$. This has no effect on the trajectory DE results however, and is mostly an aesthetic choice. 
 
 ```{r}
-sling_res <- slingshot(Embeddings(seu, "umap"), 
+sling_res <- slingshot(Embeddings(seu, "umap"),
+                       start.clus = "5",
                        clusterLabels = seu$seurat_clusters, 
-                       start.clus = "4", 
-                       approx_points = 1000)
+                       approx_points = 500)
 sling_pt <- slingPseudotime(sling_res) %>% 
             as.data.frame() %>% 
             magrittr::set_colnames(c("PT")) %>% 
@@ -236,8 +243,7 @@ p3 <- Embeddings(seu, "umap") %>%
       mutate(PT = sling_pt$PT) %>% 
       ggplot(aes(x = UMAP_1, y = UMAP_2, color = PT)) + 
       geom_point(size = 1, alpha = 0.75) + 
-      labs(x = "UMAP 1", 
-           y = "UMAP 2", 
+      labs(y = "UMAP 2", 
            color = "Pseudotime") + 
       scale_color_gradientn(colors = palette_heatmap, 
                             labels = scales::label_number(accuracy = 0.01)) + 
@@ -252,29 +258,26 @@ p4
 
 ## Trajectory Differential Expression
 
-Next, we prepare the primary inputs to `{scLANE}`: a dense counts matrix (with cells as rows and genes as columns - this is important), a dataframe containing our estimated pseudotime ordering, and a character vector of the genes that we're interested in modeling. We parallelize over genes in order to speed up the computation at the expense of using a little more memory. The models are fit using NB GLMs with optimal spline knots identified empirically, and differential expression is quantified using a likelihood ratio test of the fitted model vs. the null (intercept-only) model. In practice, genes designated as HVGs are usually the best candidates for modeling, so we choose the top 3,000 HVGs as our input. **Note**: the testing of the HVG set on its own is also justified by the reality that almost all trajectories are inferred using some sort of dimension-reduced space, and those embeddings are nearly universally generated using a set of HVGs. As such, genes not included in the HVG set actually have no direct relationship with the estimated trajectory, & it's generally safe to exclude them from trajectory analyses. 
+Next, we prepare the primary inputs to `scLANE`: our `Seurat` object with the spliced counts set as the default assay, a dataframe containing our estimated pseudotime ordering, a vector of size factors to use as an offset in each model, and a set of genes whose dynamics we want to model. `scLANE` parallelizes over genes in order to speed up the computation at the expense of using a little more memory. The models are fit using NB GLMs with optimal spline knots identified empirically, and differential expression is quantified using a likelihood ratio test of the fitted model vs. a constant (intercept-only) model. In practice, genes designated as HVGs are usually the best candidates for modeling, so we choose the top 3,000 HVGs as our input. **Note**: the testing of the HVG set on its own is also justified by the reality that almost all trajectories are inferred using some sort of dimension-reduced space, and those embeddings are nearly universally generated using a set of HVGs. As such, genes not included in the HVG set actually have no direct relationship with the estimated trajectory, & it's generally safe to exclude them from trajectory analyses. 
 
 ```{r, results='hold'}
 top3k_hvg <- HVFInfo(seu) %>% 
              arrange(desc(variance.standardized)) %>% 
              slice_head(n = 3000) %>% 
              rownames(.)
-raw_counts <- t(as.matrix(seu@assays$spliced@counts[top3k_hvg, ]))
-cell_offset <- createCellOffset(seu, scale.factor = 1e4)
-scLANE_res <- testDynamic(raw_counts, 
+cell_offset <- createCellOffset(seu)
+scLANE_res <- testDynamic(seu, 
                           pt = sling_pt, 
-                          n.potential.basis.fns = 5, 
+                          genes = top3k_hvg, 
                           size.factor.offset = cell_offset, 
-                          parallel.exec = TRUE, 
                           n.cores = 4, 
                           track.time = TRUE)
 ```
 
-We pull a sample of 10 genes from the results (which we clean up using `getResultsDE()`) & display their test statistics. By default, any gene with an adjusted *p*-value less than 0.01 is predicted to be dynamic, though this threshold can be easily adjusted. 
+After tidying the TDE results with `getResultsDE()`, we pull a sample of 10 genes from the results & display their test statistics. By default, any gene with an adjusted *p*-value less than 0.01 is predicted to be dynamic, though this threshold can be easily adjusted. 
 
 ```{r}
 scLANE_res_tidy <- getResultsDE(scLANE_res)
-set.seed(629)
 select(scLANE_res_tidy, 
        Gene, 
        Test_Stat, 
@@ -282,33 +285,35 @@ select(scLANE_res_tidy,
        P_Val_Adj,
        Gene_Dynamic_Overall) %>% 
   mutate(Gene_Dynamic_Overall = if_else(Gene_Dynamic_Overall == 1, "Dynamic", "Static")) %>% 
-  slice_sample(n = 10) %>% 
+  with_groups(Gene_Dynamic_Overall, 
+              slice_sample, 
+              n = 3) %>% 
   kableExtra::kbl(digits = 5, 
                   booktabs = TRUE, 
                   col.names = c("Gene", "LRT Statistic", "P-value", "Adj. P-value", "Predicted Gene Status")) %>% 
   kableExtra::kable_classic(full_width = FALSE, "hover")
 ```
 
-Next, we can use the `plotModels()` function to visualize the fitted models from `{scLANE}` and compare them to other modeling methods. The gene [*Neurog3*](https://www.ncbi.nlm.nih.gov/gene/11925) is strongly associated with epithelial cell differentiation, and indeed we see a very clear, nonlinear transcriptional dynamic across pseudotime for that gene. A traditional GLM fails to capture that nonlinearity, and a GAM overfits the trend and does not accurately model the sharpness of the transcriptional switch that occurs halfway through the trajectory. Only the `scLANE` model accurately models the rapid upregulation and equally swift downregulation of *Neurog3* over pseudotime thanks to its adaptive choice of knots & piecewise linear nature. 
+Next, we can use the `plotModels()` function to visualize the fitted models from `scLANE` and compare them to other modeling methods. The gene [*Neurog3*](https://www.ncbi.nlm.nih.gov/gene/11925) is strongly associated with epithelial cell differentiation, and indeed we see a very clear, nonlinear transcriptional dynamic across pseudotime for that gene. A traditional GLM fails to capture that nonlinearity, and while a GAM fits the trend smoothly, it fails to capture the sharpness of the transcriptional switch that occurs halfway through the trajectory. Only the `scLANE` model accurately models the rapid upregulation and equally swift downregulation of *Neurog3* over pseudotime, in addition to identifying the cutpoint in pseudotime at which downregulation begins. 
 
 ```{r, fig.width=9, fig.height=5}
 p5 <- plotModels(scLANE_res, 
                  gene = "Neurog3", 
                  pt = sling_pt, 
-                 expr.mat = raw_counts, 
+                 expr.mat = seu, 
                  size.factor.offset = cell_offset, 
                  plot.null = FALSE) + 
-        scale_color_manual(values = c("forestgreen"))
+      scale_color_manual(values = c("forestgreen"))
 p5
 ```
 
 Using the `getFittedValues()` function allows us to generate predictions from the models we fit, which we then use to visualize the dynamics of a few genes that are known to be strongly associated with the differentiation of immature cells into mature endocrine phenotypes. For all four genes, the fitted models show knots chosen in the area of pseudotime around the pre-endocrine cells. This tells us that these driver genes are being upregulated in precursor celltypes & are driving differentiation into the mature celltypes such as alpha & beta cells, after which the genes are downregulated. 
 
 ```{r, fig.width=12, fig.height=6}
-p6 <- getFittedValues(test.dyn.res = scLANE_res, 
+p6 <- getFittedValues(scLANE_res, 
                       genes = c("Chga", "Chgb", "Fev", "Cck"), 
                       pt = sling_pt, 
-                      expr.mat = raw_counts, 
+                      expr.mat = seu, 
                       size.factor.offset = cell_offset, 
                       cell.meta.data = select(seu@meta.data, celltype, celltype_coarse)) %>% 
       ggplot(aes(x = pt, y = expression)) + 
@@ -333,21 +338,25 @@ p6 <- getFittedValues(test.dyn.res = scLANE_res,
                  linetype = "dashed", 
                  color = "grey20") + 
       geom_ribbon(aes(ymin = scLANE_ci_ll, ymax = scLANE_ci_ul), 
-                  size = 0, 
+                  linewidth = 0, 
                   fill = "grey70", 
                   alpha = 0.9) + 
       geom_line(aes(y = scLANE_fitted), 
                 color = "black", 
-                size = 0.75) + 
-      scale_x_continuous(labels = scales::label_number(accuracy = 0.1)) + 
+                linewidth = 0.75) + 
+      scale_x_continuous(labels = scales::label_number(accuracy = 0.01)) + 
       scale_color_manual(values = palette_celltype) + 
       labs(x = "Pseudotime", 
            y = "Expression", 
            title = "Endrocrinogenesis Driver Genes Across Pseudotime", 
            subtitle = "scLANE piecewise negative binomial GLMs") + 
-      theme_classic(base_size = 14) + 
+      theme_classic(base_size = 14, 
+                    base_line_size = 0.75,
+                    base_rect_size = 0.75) + 
       theme(legend.title = element_blank(), 
             strip.text.x = element_text(face = "bold"), 
+            strip.clip = "off", 
+            strip.background = element_rect(linewidth = 0.75), 
             plot.subtitle = element_text(face = "italic", size = 11)) + 
       guide_umap()
 p6
@@ -356,10 +365,10 @@ p6
 On the other hand, if we use additive models the "peak" of expression is placed among the mature endocrine celltypes - which doesn't make biological sense if we know that these genes are driving that process of differentiation. This can of course be tweaked by changing the degree or degrees of freedom of the underlying basis spline, but choosing a "best" value for those hyperparameters can be difficult, whereas `scLANE` identifies optimal parameters internally by default. In addition, the knots chosen by `scLANE` for each gene can be informative with respect to the underlying biology, whereas the knots from GAMs are evenly spaced at quantiles & carry no biological interpretation. 
 
 ```{r, fig.width=12, fig.height=6}
-p7 <- getFittedValues(test.dyn.res = scLANE_res, 
+p7 <- getFittedValues(scLANE_res, 
                       genes = c("Chga", "Chgb", "Fev", "Cck"), 
                       pt = sling_pt, 
-                      expr.mat = raw_counts, 
+                      expr.mat = seu, 
                       size.factor.offset = cell_offset, 
                       cell.meta.data = select(seu@meta.data, celltype, celltype_coarse)) %>% 
       with_groups(gene, 
@@ -381,21 +390,25 @@ p7 <- getFittedValues(test.dyn.res = scLANE_res,
                  scales = "free_y") + 
       geom_point(aes(color = celltype), size = 1, alpha = 0.75) + 
       geom_ribbon(aes(ymin = GAM_ci_ll, ymax = GAM_ci_ul), 
-                  size = 0, 
+                  linewidth = 0, 
                   fill = "grey70", 
                   alpha = 0.9) + 
       geom_line(aes(y = GAM_fitted), 
                 color = "black", 
-                size = 0.75) + 
-      scale_x_continuous(labels = scales::label_number(accuracy = 0.1)) + 
+                linewidth = 0.75) + 
+      scale_x_continuous(labels = scales::label_number(accuracy = 0.01)) + 
       scale_color_manual(values = palette_celltype) + 
       labs(x = "Pseudotime", 
            y = "Expression", 
            title = "Endrocrinogenesis Driver Genes Across Pseudotime", 
            subtitle = "Cubic basis spline negative binomial GAMs") + 
-      theme_classic(base_size = 14) + 
+      theme_classic(base_size = 14, 
+                    base_line_size = 0.75,
+                    base_rect_size = 0.75) + 
       theme(legend.title = element_blank(), 
             strip.text.x = element_text(face = "bold"), 
+            strip.clip = "off", 
+            strip.background = element_rect(linewidth = 0.75), 
             plot.subtitle = element_text(face = "italic", size = 11)) + 
       guide_umap()
 p7
@@ -423,7 +436,7 @@ p8 <- ggplot(knot_df, aes(x = knot)) +
       geom_density(fill = "deepskyblue3", 
                    alpha = 0.75, 
                    color = "deepskyblue4", 
-                   size = 1) + 
+                   linewidth = 1) + 
       scale_x_continuous(limits = c(0, 1), labels = scales::label_number(accuracy = 0.1)) + 
       labs(x = "Knot Location") + 
       theme_classic(base_size = 14) + 
@@ -434,7 +447,7 @@ p9 <- data.frame(celltype = seu$celltype,
                  pt = seu$sling_pt) %>% 
       ggplot(aes(x = pt, y = celltype, fill = celltype, color = celltype)) + 
       ggridges::geom_density_ridges(alpha = 0.75, size = 1, scale = 0.95) + 
-      scale_x_continuous(labels = scales::label_number(accuracy = 0.1)) + 
+      scale_x_continuous(labels = scales::label_number(accuracy = 0.1), limits = c(0, 1)) + 
       scale_fill_manual(values = palette_celltype) + 
       scale_color_manual(values = palette_celltype) + 
       labs(x = "Pseudotime") + 
@@ -443,13 +456,13 @@ p9 <- data.frame(celltype = seu$celltype,
             legend.title = element_blank()) + 
       guide_umap()
 p10 <- (p8 / p9) + 
-       plot_layout(heights = c(1/3, 2/3)) + 
+       plot_layout(heights = c(1/4, 3/4)) + 
        plot_annotation(title = "Distribution of Adaptively-chosen Knots from scLANE", 
                        theme = theme_classic(base_size = 14))
 p10
 ```
 
-We can extract a matrix of fitted values using `smoothedCountsMatrix()`; here we focus on the top 1,000 most dynamic genes, with the goal of identifying clusters of similarly-expressed genes. After reducing dimensionality with PCA, we cluster the genes using the Leiden algorithm & embed the genes in two dimensions with UMAP.  
+We can extract a matrix of fitted values using `smoothedCountsMatrix()`; here we focus on the top 2,000 most dynamic genes, with the goal of identifying clusters of similarly-expressed genes. After reducing dimensionality with PCA, we cluster the genes using the Leiden algorithm & embed the genes in two dimensions with UMAP.  
 
 ```{r}
 smoothed_counts <- smoothedCountsMatrix(scLANE_res, 
@@ -476,6 +489,8 @@ smoothed_counts_clust <- igraph::cluster_leiden(smoothed_counts_snn,
                                                 objective_function = "modularity", 
                                                 resolution_parameter = 0.3)
 gene_clust_df <- data.frame(gene = colnames(smoothed_counts$Lineage_A), 
+                            pc1 = smoothed_counts_pca$x[, 1], 
+                            pc2 = smoothed_counts_pca$x[, 2], 
                             umap1 = smoothed_counts_umap[, 1], 
                             umap2 = smoothed_counts_umap[, 2], 
                             leiden = as.factor(smoothed_counts_clust$membership - 1L))
@@ -490,14 +505,14 @@ p11 <- ggplot(gene_clust_df, aes(x = umap1, y = umap2, color = leiden)) +
             y = "UMAP 2", 
             color = "Leiden Cluster", 
             title = "Unsupervised Clustering of Dynamic Genes", 
-            subtitle = "Top 2,000 significantly dynamic genes after PCA") +
+            subtitle = "Top 2,000 TDE genes after PCA") +
        paletteer::scale_color_paletteer_d("ggsci::default_igv") + 
        theme_umap() + 
        guide_umap()
 p11
 ```
 
-We can also plot a heatmap of the dynamic genes; this requires a bit of setup, for which we'll use the `{ComplexHeatmap}` package. We scale each gene, and clip values to be on $[-6, 6]$. The columns of the heatmap are ordered by estimated pseudotime. 
+We can also plot a heatmap of the dynamic genes; this requires a bit of setup, for which we'll use the `ComplexHeatmap` package. We scale each gene, and clip values to be on $[-6, 6]$. The columns (cells) of the heatmap are ordered by estimated pseudotime, and the rows (genes) are ordered by expression peak. 
 
 ```{r}
 col_anno_df <- select(seu@meta.data, 
@@ -506,11 +521,13 @@ col_anno_df <- select(seu@meta.data,
                       sling_pt) %>% 
                mutate(celltype = as.factor(celltype)) %>% 
                arrange(sling_pt)
+gene_order <- sortGenesHeatmap(smoothed_counts$Lineage_A, pt.vec = sling_pt$PT)
 heatmap_mat <- t(scale(smoothed_counts$Lineage_A))
 heatmap_mat[heatmap_mat > 6] <- 6
 heatmap_mat[heatmap_mat < -6] <- -6
 colnames(heatmap_mat) <- seu$cell_name
 heatmap_mat <- heatmap_mat[, col_anno_df$cell_name]
+heatmap_mat <- heatmap_mat[gene_order, ]
 palette_celltype_hm <- as.character(palette_celltype[1:length(unique(seu$celltype))])
 names(palette_celltype_hm) <- levels(col_anno_df$celltype)
 col_anno <- HeatmapAnnotation(Celltype = col_anno_df$celltype, 
@@ -541,13 +558,11 @@ Heatmap(matrix = heatmap_mat,
         col = circlize::colorRamp2(colors = viridis::inferno(50), 
                                    breaks = seq(min(heatmap_mat), max(heatmap_mat), length.out = 50)), 
         cluster_columns = FALSE,
-        show_column_dend = FALSE,
-        cluster_column_slices = FALSE,
         width = 12, 
         height = 6, 
         column_title = "Dynamic Genes Across Pseudotime in Murine Pancreatic Endocrinogenesis",
         column_title_gp = gpar(fontface = "bold"), 
-        show_row_dend = TRUE,
+        cluster_rows = FALSE,
         top_annotation = col_anno, 
         left_annotation = row_anno, 
         show_column_names = FALSE, 
@@ -595,129 +610,4 @@ mutate(enrich_res$result,
 
 ```{r}
 sessioninfo::session_info()
-```
-
-```{r, echo=FALSE, include=FALSE, results='hide', eval=FALSE}
-ggsave(plot = p0, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Leiden_Cluster_UMAP.pdf", 
-       device = "pdf", 
-       width = 9, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-ggsave(plot = p1, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Celltype_UMAP.pdf", 
-       device = "pdf", 
-       width = 9, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-ggsave(plot = p2, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Leiden_Cluster_and_Celltype_Combined_UMAP.pdf", 
-       device = "pdf", 
-       width = 9, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-ggsave(plot = p3, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Slingshot_Pseudotime_UMAP.pdf", 
-       device = "pdf", 
-       width = 9, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-ggsave(plot = p4, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Slingshot_Pseudotime_and_Celltype_Combined_UMAP.pdf", 
-       device = "pdf", 
-       width = 9, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-ggsave(plot = p5, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Neurog3_Gene_Dynamics_Model_Comparison.pdf", 
-       device = "pdf", 
-       width = 12, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-ggsave(plot = p6, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Endocrine_Driver_Gene_Dynamics_scLANE.pdf", 
-       device = "pdf", 
-       width = 12, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-ggsave(plot = p7, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Endocrine_Driver_Gene_Dynamics_GAM.pdf", 
-       device = "pdf", 
-       width = 12, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-ggsave(plot = p8, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Dynamic_Gene_Knot_Distribution.pdf", 
-       device = "pdf", 
-       width = 9, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-ggsave(plot = p9, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Pseudotime_Density_by_Celltype_Ridgeline.pdf", 
-       device = "pdf", 
-       width = 9, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-ggsave(plot = p10, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Dynamic_Gene_Knot_Distribution_and_Celltype_Pseudotime_Ridgeline_Combined.pdf", 
-       device = "pdf", 
-       width = 9, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-ggsave(plot = p11, 
-       path = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/", 
-       filename = "Leiden_Cluster_of_Top_Dynamic_Genes_UMAP.pdf", 
-       device = "pdf", 
-       width = 9, 
-       height = 6, 
-       dpi = "retina",
-       units = "in")
-pdf("~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/scLANE_Pseudotime_Heatmap.pdf",
-    width = 12,
-    height = 6)
-Heatmap(matrix = heatmap_mat, 
-        name = "Spliced\nmRNA", 
-        col = circlize::colorRamp2(colors = viridis::inferno(50), 
-                                   breaks = seq(min(heatmap_mat), max(heatmap_mat), length.out = 50)), 
-        cluster_columns = FALSE,
-        show_column_dend = FALSE,
-        cluster_column_slices = FALSE,
-        width = 12, 
-        height = 6, 
-        column_title = "Dynamic Genes Across Pseudotime in Murine Pancreatic Endocrinogenesis",
-        column_title_gp = gpar(fontface = "bold"), 
-        show_row_dend = TRUE,
-        top_annotation = col_anno, 
-        left_annotation = row_anno, 
-        show_column_names = FALSE, 
-        show_row_names = FALSE, 
-        use_raster = TRUE,
-        raster_by_magick = TRUE, 
-        raster_quality = 5)
-dev.off()
-openxlsx::write.xlsx(enrich_res$result, 
-                     file = "~/Desktop/PhD/Research/scLANE_Project/Writing/Panc_Endo_Case_Study/GOBP_Enrichment.xlsx", 
-                     overwrite = TRUE)
 ```
