@@ -13,7 +13,7 @@ about:
       href: https://github.com/jr-leary7
 ---
 
-I am a first-year PhD student at the University of Florida under Dr. Rhonda Bacher. My primary research interest are genomics and genetics, and particularly single cell RNA-seq computational method development. I mostly develop tools related to clustering, trajectory inference, and differential expression analysis. In addition, I also focus on scientific reproducibility, computational scalability, and interpretable inference. 
+I am a second-year PhD student at the University of Florida under Dr. Rhonda Bacher. My primary research interest are genomics and genetics, and particularly single cell RNA-seq computational method development. I mostly develop tools related to trajectory inference, clustering, and differential expression analysis. In addition, I also focus on scientific reproducibility, computational scalability, and effective data visualization. 
 
 ----------
 
@@ -39,6 +39,10 @@ Aug 2016 - May 2020
 **University of Florida** | Graduate Research & Teaching Assistant 
 
 May 2021 - present
+
+**University of North Carolina** | Research Collaborator
+
+August 2020 - present
 
 **Blue Cross Blue Shield of Florida** | Data Analyst 
 
