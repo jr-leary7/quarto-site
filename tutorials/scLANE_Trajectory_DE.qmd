@@ -191,11 +191,10 @@ p0 <- DimPlot(seu,
               group.by = "seurat_clusters", 
               pt.size = 1, 
               cols = alpha(palette_cluster, 0.75)) + 
-      labs(y = "UMAP 2", 
-           color = "Leiden Cluster") + 
+      labs(color = "Leiden Cluster") + 
       theme_umap() + 
       theme(plot.title = element_blank(), 
-            axis.title.x = element_blank(), 
+            axis.title = element_blank(), 
             axis.line.x = element_blank()) + 
       guide_umap()
 p1 <- DimPlot(seu, 
@@ -218,7 +217,7 @@ p2
 
 ## Pseudotime Estimation
 
-We'll start by fitting a trajectory using the `slingshot` R package. We define cluster 4 as the starting cluster, since in this case we're already aware of the dataset's underlying biology. After generating the estimates for each cell, we rescale the ordering to be defined on $[0, 1]$. This has no effect on the trajectory DE results however, and is mostly an aesthetic choice. 
+We'll start by fitting a trajectory using the `slingshot` R package. We define cluster 5 as the starting cluster, since in this case we're already aware of the dataset's underlying biology. After generating the estimates for each cell, we rescale the ordering to be defined on $[0, 1]$. This has no effect on the trajectory DE results however, and is mostly an aesthetic choice. 
 
 ```{r}
 sling_res <- slingshot(Embeddings(seu, "umap"),
@@ -243,12 +242,11 @@ p3 <- Embeddings(seu, "umap") %>%
       mutate(PT = sling_pt$PT) %>% 
       ggplot(aes(x = UMAP_1, y = UMAP_2, color = PT)) + 
       geom_point(size = 1, alpha = 0.75) + 
-      labs(y = "UMAP 2", 
-           color = "Pseudotime") + 
+      labs(color = "Pseudotime") + 
       scale_color_gradientn(colors = palette_heatmap, 
                             labels = scales::label_number(accuracy = 0.01)) + 
       theme_umap() + 
-      theme(axis.title.x = element_blank(), 
+      theme(axis.title = element_blank(), 
             axis.line.x = element_blank())
 p4 <- (p3 / p1) + 
       plot_annotation(title = "Estimated Cell Ordering from Slingshot", 
@@ -316,7 +314,7 @@ p6 <- getFittedValues(scLANE_res,
                       expr.mat = seu, 
                       size.factor.offset = cell_offset, 
                       cell.meta.data = select(seu@meta.data, celltype, celltype_coarse)) %>% 
-      ggplot(aes(x = pt, y = expression)) + 
+      ggplot(aes(x = pt, y = rna_log1p)) + 
       facet_wrap(~gene, 
                  ncol = 2, 
                  scales = "free_y") + 
@@ -337,24 +335,24 @@ p6 <- getFittedValues(scLANE_res,
                  mapping = aes(xintercept = knot), 
                  linetype = "dashed", 
                  color = "grey20") + 
-      geom_ribbon(aes(ymin = scLANE_ci_ll, ymax = scLANE_ci_ul), 
+      geom_ribbon(aes(ymin = scLANE_ci_ll_log1p, ymax = scLANE_ci_ul_log1p), 
                   linewidth = 0, 
                   fill = "grey70", 
                   alpha = 0.9) + 
-      geom_line(aes(y = scLANE_fitted), 
+      geom_line(aes(y = scLANE_pred_log1p), 
                 color = "black", 
                 linewidth = 0.75) + 
       scale_x_continuous(labels = scales::label_number(accuracy = 0.01)) + 
       scale_color_manual(values = palette_celltype) + 
       labs(x = "Pseudotime", 
-           y = "Expression", 
+           y = "Normalized Expression", 
            title = "Endrocrinogenesis Driver Genes Across Pseudotime", 
            subtitle = "scLANE piecewise negative binomial GLMs") + 
       theme_classic(base_size = 14, 
                     base_line_size = 0.75,
                     base_rect_size = 0.75) + 
       theme(legend.title = element_blank(), 
-            strip.text.x = element_text(face = "bold"), 
+            strip.text.x = element_text(face = "italic"), 
             strip.clip = "off", 
             strip.background = element_rect(linewidth = 0.75), 
             plot.subtitle = element_text(face = "italic", size = 11)) + 
@@ -371,42 +369,46 @@ p7 <- getFittedValues(scLANE_res,
                       expr.mat = seu, 
                       size.factor.offset = cell_offset, 
                       cell.meta.data = select(seu@meta.data, celltype, celltype_coarse)) %>% 
+      mutate(rna_raw = rna / size_factor, .before = 7) %>% 
       with_groups(gene, 
                   mutate, 
-                  GAM_fitted_link = predict(nbGAM(expr = expression, 
+                  GAM_fitted_link = predict(nbGAM(expr = rna_raw, 
                                                   pt = sling_pt, 
                                                   Y.offset = cell_offset, 
                                                   spline.df = 3)), 
-                  GAM_se_link = predict(nbGAM(expr = expression, 
+                  GAM_se_link = predict(nbGAM(expr = rna_raw, 
                                               pt = sling_pt, 
                                               Y.offset = cell_offset, 
                                               spline.df = 3), se.fit = T)[[2]]) %>% 
-      mutate(GAM_fitted = exp(GAM_fitted_link) * cell_offset, 
-             GAM_ci_ll = exp(GAM_fitted_link - qnorm(0.975, lower.tail = FALSE) * GAM_se_link) * cell_offset, 
-             GAM_ci_ul = exp(GAM_fitted_link + qnorm(0.975, lower.tail = FALSE) * GAM_se_link) * cell_offset) %>% 
-      ggplot(aes(x = pt, y = expression)) + 
+      mutate(GAM_pred = exp(GAM_fitted_link) * cell_offset, 
+             GAM_ci_ll = exp(GAM_fitted_link - qnorm(0.975) * GAM_se_link) * cell_offset, 
+             GAM_ci_ul = exp(GAM_fitted_link + qnorm(0.975) * GAM_se_link) * cell_offset, 
+             GAM_pred_log1p = log1p(GAM_pred), 
+             GAM_ci_ll_log1p = log1p(GAM_ci_ll), 
+             GAM_ci_ul_log1p = log1p(GAM_ci_ul)) %>% 
+      ggplot(aes(x = pt, y = rna_log1p)) + 
       facet_wrap(~gene, 
                  ncol = 2, 
                  scales = "free_y") + 
       geom_point(aes(color = celltype), size = 1, alpha = 0.75) + 
-      geom_ribbon(aes(ymin = GAM_ci_ll, ymax = GAM_ci_ul), 
+      geom_ribbon(aes(ymin = GAM_ci_ll_log1p, ymax = GAM_ci_ul_log1p), 
                   linewidth = 0, 
                   fill = "grey70", 
                   alpha = 0.9) + 
-      geom_line(aes(y = GAM_fitted), 
+      geom_line(aes(y = GAM_pred_log1p), 
                 color = "black", 
                 linewidth = 0.75) + 
       scale_x_continuous(labels = scales::label_number(accuracy = 0.01)) + 
       scale_color_manual(values = palette_celltype) + 
       labs(x = "Pseudotime", 
-           y = "Expression", 
+           y = "Normalized Expression", 
            title = "Endrocrinogenesis Driver Genes Across Pseudotime", 
            subtitle = "Cubic basis spline negative binomial GAMs") + 
       theme_classic(base_size = 14, 
                     base_line_size = 0.75,
                     base_rect_size = 0.75) + 
       theme(legend.title = element_blank(), 
-            strip.text.x = element_text(face = "bold"), 
+            strip.text.x = element_text(face = "italic"), 
             strip.clip = "off", 
             strip.background = element_rect(linewidth = 0.75), 
             plot.subtitle = element_text(face = "italic", size = 11)) + 
@@ -469,7 +471,6 @@ smoothed_counts <- smoothedCountsMatrix(scLANE_res,
                                         pt = sling_pt, 
                                         genes = dyn_genes[1:2000], 
                                         size.factor.offset = cell_offset, 
-                                        parallel.exec = TRUE, 
                                         n.cores = 2)
 set.seed(312)
 smoothed_counts_pca <- irlba::prcomp_irlba(t(smoothed_counts$Lineage_A), 
@@ -496,10 +497,27 @@ gene_clust_df <- data.frame(gene = colnames(smoothed_counts$Lineage_A),
                             leiden = as.factor(smoothed_counts_clust$membership - 1L))
 ```
 
-The embedding & clustering show that even with the relatively small number of genes, clear patterns are visible. 
+First we'll visualize the gene clusters on the first two PCs. 
 
 ```{r}
-p11 <- ggplot(gene_clust_df, aes(x = umap1, y = umap2, color = leiden)) + 
+p11 <- ggplot(gene_clust_df, aes(x = pc1, y = pc2, color = leiden)) + 
+       geom_point(size = 1, alpha = 0.75) + 
+       labs(x = "PC 1", 
+            y = "PC 2", 
+            color = "Leiden Cluster", 
+            title = "Unsupervised Clustering of Dynamic Genes", 
+            subtitle = "Top 2,000 TDE genes after PCA") +
+       paletteer::scale_color_paletteer_d("ggsci::default_igv") + 
+       theme_umap() + 
+       guide_umap()
+p11
+```
+
+
+The UMAP embedding shows that even with the relatively small number of genes, clear patterns are visible. 
+
+```{r}
+p12 <- ggplot(gene_clust_df, aes(x = umap1, y = umap2, color = leiden)) + 
        geom_point(size = 1, alpha = 0.75) + 
        labs(x = "UMAP 1", 
             y = "UMAP 2", 
@@ -509,7 +527,7 @@ p11 <- ggplot(gene_clust_df, aes(x = umap1, y = umap2, color = leiden)) +
        paletteer::scale_color_paletteer_d("ggsci::default_igv") + 
        theme_umap() + 
        guide_umap()
-p11
+p12
 ```
 
 We can also plot a heatmap of the dynamic genes; this requires a bit of setup, for which we'll use the `ComplexHeatmap` package. We scale each gene, and clip values to be on $[-6, 6]$. The columns (cells) of the heatmap are ordered by estimated pseudotime, and the rows (genes) are ordered by expression peak. 
@@ -550,7 +568,7 @@ row_anno <- HeatmapAnnotation(Cluster = as.factor(gene_clust_df$leiden),
                               which = "row")
 ```
 
-The heatmap shows clear dynamic patterns across pseudotime, and the hierarchical clustering agrees fairly well with our graph-based clustering from earlier. 
+The heatmap shows clear dynamic patterns across pseudotime; these patterns are often referred to as *expression cascades*, and represent periodic up- and down-regulation of different gene programs during the course of the underlying biological process. 
 
 ```{r, fig.width=12, fig.height=6}
 Heatmap(matrix = heatmap_mat, 

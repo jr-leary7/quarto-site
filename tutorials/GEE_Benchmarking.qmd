@@ -3,12 +3,14 @@ title: "Benchmarking Negative Binomial GEE Model Backends"
 author:
   name: Jack Leary
   email: j.leary@ufl.edu
+  orcid: 0009-0004-8821-3269
   affiliations:
     - name: University of Florida
       department: Biostatistics 
       city: Gainesville
       state: FL
-date: "`r Sys.Date()`"
+date: today
+date-format: long
 format:
   html:
     code-fold: show
@@ -47,7 +49,7 @@ library(reticulate)  # call Python from R
 
 ## Python
 
-We'll call the Python code from R using `{reticulate}`, but we'll need to make sure to use the virtual environment I set up previously that has the `statsmodels` and `pandas` libraries (and their various dependencies) installed. 
+We'll call the Python code from R using `reticulate`, but we'll need to make sure to use the virtual environment I set up previously that has the `statsmodels` and `pandas` libraries (and their various dependencies) installed. 
 
 ```{r, results='hide'}
 use_virtualenv("~/Desktop/Python/science/venv/", required = TRUE)
@@ -92,7 +94,7 @@ dropout_idx <- sample(seq(nrow(sim_df)), size = round(0.1 * nrow(sim_df)))
 sim_df$Y[dropout_idx] <- 0
 ```
 
-Next, since we're dealing with independent observations we fit an NB GLM via the `{MASS}` package which we'll use to generate fitted values and standard errors. 
+Next, since we're dealing with independent observations we fit an NB GLM via the `MASS` package which we'll use to generate fitted values and standard errors. 
 
 ```{r}
 nb_glm <- MASS::glm.nb(Y ~ X, 
@@ -247,7 +249,7 @@ run_model <- function(sim.data = NULL, model.type = NULL) {
 
 ## Running the Experiment
 
-We fit each model over 100 iterations, and save the results in a list (`{purrr}` is great for this kind of thing). 
+We fit each model over 100 iterations, and save the results in a list (`purrr` is great for this kind of thing). 
 
 ```{r}
 sim_list <- purrr::map(seq(100), function(i) {
@@ -374,7 +376,7 @@ sim_res_df %>%
 
 # Conclusions 
 
-Since the estimated coefficients and correlation parameters seem to be pretty much the same between methods, and the RMSE / Huber loss don't differ much either, it would make sense to choose the modeling framework with the fastest runtime as the best option. For GEEs this is either of `statsmodels` or `GEE.jl`, which outperformed the R-based `{geeM}` and `{mmmgee}` quite handily (mean and median values are shown below for each method). The Julia implementation is good too, if ever so marginally slower than `statsmodels`, though the time it takes to perform the first fit is somewhat annoying. In addition, the `statsmodels` implementation varies less in runtime than all other options. This would seem to be an easy decision other than that it might be difficult to release & support R packages utilizing a Python library instead of a native R backend, since not all R users know Python, have it installed, or are capable of debugging its output. `GEE.jl` obviously carries the same drawbacks, with the additional caveat of Julia being a much less widely-used language than either of R or Python. This is a tricky decision & I'm not sure of the right course to take yet, but I am impressed with how well `statsmodels` performs and will absolutely be considering using it more in the future. 
+Since the estimated coefficients and correlation parameters seem to be pretty much the same between methods, and the RMSE / Huber loss don't differ much either, it would make sense to choose the modeling framework with the fastest runtime as the best option. For GEEs this is either of `statsmodels` or `GEE.jl`, which outperformed the R-based `geeM` and `mmmgee` quite handily (mean and median values are shown below for each method). The Julia implementation is good too, if ever so marginally slower than `statsmodels`, though the time it takes to perform the first fit is somewhat annoying. In addition, the `statsmodels` implementation varies less in runtime than all other options. This would seem to be an easy decision other than that it might be difficult to release & support R packages utilizing a Python library instead of a native R backend, since not all R users know Python, have it installed, or are capable of debugging its output. `GEE.jl` obviously carries the same drawbacks, with the additional caveat of Julia being a much less widely-used language than either of R or Python. This is a tricky decision & I'm not sure of the right course to take yet, but I am impressed with how well `statsmodels` performs and will absolutely be considering using it more in the future. 
 
 ```{r}
 sim_res_df %>% 

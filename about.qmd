@@ -22,14 +22,14 @@ Outside of research, I enjoy reading (my favorite genres are nautical adventure,
 
 ## R Packages
 
-- [`{SCISSORS}`](https://github.com/jr-leary7/SCISSORS)
-  - An extension of the `{Seurat}` framework that implements a semi-supervised scRNA-seq reclustering method built around the silhouette scores. Useful for identifying rare cell types & annotating cell subtypes. 
+- [`SCISSORS`](https://github.com/jr-leary7/SCISSORS)
+  - An extension of the `Seurat` framework that implements a semi-supervised scRNA-seq reclustering method built around the silhouette scores. Useful for identifying rare cell types & annotating cell subtypes. 
 
-- [`{scLANE}`](https://github.com/jr-leary7/scLANE)
-  - Ever wished scRNA-seq trajectory differential expression models were more interpretable? This package implements piecewise linear GLMs, GEEs, & GLMMs in order to generate easier-to-understand models that perform just as well as GAM-based methods in classifying dynamic genes. 
+- [`scLANE`](https://github.com/jr-leary7/scLANE)
+  - Ever wished scRNA-seq trajectory differential expression models were more interpretable? This package implements piecewise linear GLMs, GEEs, & GLMMs in order to generate easier-to-understand models that perform just as well as GAM-based methods at classifying temporally dynamic genes. 
 
 ## Publications 
 
-1. **Jack R. Leary**, Yi Xu, Ashley Morrison, Chong Jin, Emily C. Shen, Ye Su, Naim U. Rashid, Jen Jen Yeh, Xianlu Laura Peng. [Sub-cluster identification through semi-supervised optimization of rare-cell silhouettes (SCISSORS) in single-cell sequencing](https://doi.org/10.1101/2021.10.29.466448). *BioRxiv.* 466448, (2021). 
+1. **Jack R. Leary**, Yi Xu, Ashley Morrison, Chong Jin, Emily C. Shen, Ye Su, Naim U. Rashid, Jen Jen Yeh, Xianlu Laura Peng. [Sub-cluster identification through semi-supervised optimization of rare-cell silhouettes (SCISSORS) in single-cell sequencing](https://doi.org/10.1093/bioinformatics/btad449). *Bioinformatics* (2023). 
 
-2. Matthew E. Berginski, Madison R. Jenner, Chinmaya U. Joisa, Silvia G.Herrera Loeza, Brian T. Golitz, Matthew B. Lipner, **Jack R. Leary**, Naim U. Rashid, Gary L. Johnson, Jen Jen Yeh, Shawn M. Gomez. [Kinome state is predictive of cell viability in pancreatic cancer tumor and stroma cell lines](https://doi.org/10.1101/2021.07.21.451515). *BioRxiv.* 451515, (2021). 
+2. Matthew E. Berginski, Madison R. Jenner, Chinmaya U. Joisa, Silvia G.Herrera Loeza, Brian T. Golitz, Matthew B. Lipner, **Jack R. Leary**, Naim U. Rashid, Gary L. Johnson, Jen Jen Yeh, Shawn M. Gomez. [Kinome state is predictive of cell viability in pancreatic cancer tumor and stroma cell lines](https://doi.org/10.1101/2021.07.21.451515). *BioRxiv* (2021). 

@@ -3,12 +3,14 @@ title: "Understanding Intercepts in Linear Regression Models"
 author:
   name: Jack Leary
   email: j.leary@ufl.edu
+  orcid: 0009-0004-8821-3269
   affiliations:
     - name: University of Florida
       department: Biostatistics 
       city: Gainesville
       state: FL
-date: "`r Sys.Date()`"
+date: today
+date-format: long
 format:
   html:
     code-fold: show
