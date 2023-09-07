@@ -215,7 +215,7 @@ A_inv <- solve(A)
 round(A %*% A_inv)
 ```
 
-There are many other ways to compute a matrix inverse, as well as several different types of [pseudoinverses](https://en.wikipedia.org/wiki/Generalized_inverse). We can compute [the Moore-Penrose pseudoinverse](https://en.wikipedia.org/wiki/Moore–Penrose_inverse) using the `{MASS}` package: 
+There are many other ways to compute a matrix inverse, as well as several different types of [pseudoinverses](https://en.wikipedia.org/wiki/Generalized_inverse). We can compute [the Moore-Penrose pseudoinverse](https://en.wikipedia.org/wiki/Moore–Penrose_inverse) using the `MASS` package: 
 
 ```{r}
 A_mp_inv <- MASS::ginv(A)
@@ -392,7 +392,7 @@ y <- matrix(y, ncol = 1)
 y
 ```
 
-The mean of $\mathbf{y}$ for each treatment group can be computed as follows. We're going to use a little `{dplyr}` code to perform the summarization, as I find it a little more readable & replicable than base R. This will necessitate creating a `data.frame` to hold our $\mathbf{y}$ and $\mathbf{X}$ variables. Note that we've switched back to the categorical representation of $\mathbf{X}$, as it's more interpretable than the indicator variable version for summaries such as this. 
+The mean of $\mathbf{y}$ for each treatment group can be computed as follows. We're going to use a little `dplyr` code to perform the summarization, as I find it a little more readable & replicable than base R. This will necessitate creating a `data.frame` to hold our $\mathbf{y}$ and $\mathbf{X}$ variables. Note that we've switched back to the categorical representation of $\mathbf{X}$, as it's more interpretable than the indicator variable version for summaries such as this. 
 
 ```{r}
 data.frame(X = X, y = y)
@@ -429,7 +429,7 @@ coef(cat_mod)
 
 To summarize: when categorical variables are used in an ordinary linear regression, the intercept represents the mean of the response variable when each of the categorical variables is at its reference level. When running regressions like this, it's important to make sure that 1) you know what the reference levels are for each of your categorical variables and 2) that those reference levels make sense. Sometimes it doesn't matter what order the categorical variables are in, but it often does - so check! A final note is that this interpretation holds when *only* categorical variables are used in your model. When continuous variables are included too, the interpretation changes. More on that in a bit. 
 
-**Note**: Working with categorical variables (or factors, as R labels them) can be confusing. If you want to gain a deeper understanding of how factors work, check out [the chapter on them in the R for Data Science book](https://r4ds.had.co.nz/factors.html). For factor-related tools, try the [`{forcats}` R package](https://forcats.tidyverse.org/articles/forcats.html), which is part of the [`{tidyverse}`](https://www.tidyverse.org) ecosystem and makes dealing with factors a lot simpler. 
+**Note**: Working with categorical variables (or factors, as R labels them) can be confusing. If you want to gain a deeper understanding of how factors work, check out [the chapter on them in the R for Data Science book](https://r4ds.had.co.nz/factors.html). For factor-related tools, try the [`forcats` R package](https://forcats.tidyverse.org/articles/forcats.html), which is part of the [`tidyverse`](https://www.tidyverse.org) ecosystem and makes dealing with factors a lot simpler. 
 
 ## Models with Continuous Predictors 
 
@@ -458,7 +458,7 @@ data.frame(X = X[, 1], y = y[, 1]) %>%
   slice_head(n = 5)
 ```
 
-We can plot the data using `{ggplot2}` to get an idea of what the relationship between the two variables is. 
+We can plot the data using `ggplot2` to get an idea of what the relationship between the two variables is. 
 
 ```{r}
 data.frame(X = X[, 1], y = y[, 1]) %>% 
@@ -468,7 +468,7 @@ data.frame(X = X[, 1], y = y[, 1]) %>%
   theme_classic(base_size = 14)
 ```
 
-Using `{dplyr}`, we can find the mean of $\mathbf{y}$ when $\mathbf{X} = 0$. 
+Using `dplyr`, we can find the mean of $\mathbf{y}$ when $\mathbf{X} = 0$. 
 
 ```{r}
 data.frame(X = X[, 1], y = y) %>% 
@@ -641,7 +641,7 @@ X <- matrix(X, ncol = 1)
 X
 ```
 
-Again using `{dplyr}`, we can find $\bar{\mathbf{y}}$ and $\text{log}(\bar{\mathbf{y}})$ for each group in our categorical variable:
+Again using `dplyr`, we can find $\bar{\mathbf{y}}$ and $\text{log}(\bar{\mathbf{y}})$ for each group in our categorical variable:
 
 ```{r}
 data.frame(y = y, 

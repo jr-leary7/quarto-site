@@ -52,7 +52,7 @@ library(SeuratData)  # datasets
 
 # Data 
 
-We'll load in the well-known [PBMC3k data from 10X Genomics](https://support.10xgenomics.com/single-cell-gene-expression/datasets/1.1.0/pbmc3k), which is often used in example workflows such as the [`{Seurat}` clustering vignette](https://satijalab.org/seurat/articles/pbmc3k_tutorial.html) and the [`scanpy` vignette](https://scanpy-tutorials.readthedocs.io/en/latest/pbmc3k.html). If you haven't already downloaded the dataset, this function will download the raw data for you and load it into your R session. 
+We'll load in the well-known [PBMC3k data from 10X Genomics](https://support.10xgenomics.com/single-cell-gene-expression/datasets/1.1.0/pbmc3k), which is often used in example workflows such as the [`Seurat` clustering vignette](https://satijalab.org/seurat/articles/pbmc3k_tutorial.html) and the [`scanpy` vignette](https://scanpy-tutorials.readthedocs.io/en/latest/pbmc3k.html). If you haven't already downloaded the dataset, this function will download the raw data for you and load it into your R session. 
 
 ```{r}
 pbmc <- LoadData("pbmc3k")
@@ -128,7 +128,7 @@ DimPlot(pbmc, pt.size = 1) +
 
 ## Broad Annotations 
 
-First we identify CD8+ T-cells via **CD8A**, and CD4+ T-cells with **IL7R**. Lastly, **FCGR3A** (aka **CD16**) is specific to CD16+ monocytes. We can combine the plots using the `{patchwork}` package. 
+First we identify CD8+ T-cells via **CD8A**, and CD4+ T-cells with **IL7R**. Lastly, **FCGR3A** (aka **CD16**) is specific to CD16+ monocytes. We can combine the plots using the excellent `patchwork` package. 
 
 ```{r, message=FALSE, warning=FALSE}
 p1 <- FeaturePlot(pbmc, features = "CD8A", pt.size = 1) + 
@@ -202,7 +202,7 @@ DimPlot(pbmc, pt.size = 1, group.by = "broad_celltype") +
 
 ## Reclustering 
 
-From the plot above, there appears to be some visible subgroups in the monocyte cluster. With that being said - I would generally be very cautious about using UMAPs alone to define heterogeneous groups. In general, I would suggest using something like silhouette score distributions, other clustering statistics, or biological knowledge to determine subclustering targets. We can do this below using `ComputSilhouetteScores()`, which returns a silhouette score for each individual cell. Visualizing the results can help us identify which clusters are "poor" fits. For more information, check out [the Wikipedia article on clustering scores](https://en.wikipedia.org/wiki/Cluster_analysis#Evaluation_and_assessment).  
+From the plot above, there appears to be some visible subgroups in the monocyte cluster. With that being said - I would generally be very cautious about using UMAPs alone to define heterogeneous groups. In general, I would suggest using something like silhouette score distributions, other clustering statistics, or biological knowledge to determine subclustering targets. We can do this below using `ComputeSilhouetteScores()`, which returns a silhouette score for each individual cell. Visualizing the results can help us identify which clusters are "poor" fits. For more information, check out [the Wikipedia article on clustering scores](https://en.wikipedia.org/wiki/Cluster_analysis#Evaluation_and_assessment).  
 
 ```{r}
 sil_scores <- ComputeSilhouetteScores(pbmc, avg = FALSE)
@@ -381,7 +381,7 @@ DimPlot(pbmc, group.by = "celltype", pt.size = 1) +
 
 # Conclusions 
 
-We were able to use `SCISSORS` to estimate a biologically meaningful subclustering that is to some degree supported by canonical marker genes from the literature. I'll note that while these monocyte subtype annotations might be useful, we didn't analyze the entire dataset;  those familiar with the PBMC3k dataset will know that what we labelled the CD8+ T cell cluster actually also contains NK cells. This analysis is not meant to be exhaustive or final, and serves mostly to show how and why `SCISSORS` is used. Please reach out to me with questions on the package [via email](mailto:jrleary@live.unc.edu), or by opening [an issue](https://github.com/jr-leary7/SCISSORS/issues) on [the `SCISSORS` GitHub repository](https://github.com/jr-leary7/SCISSORS). 
+We were able to use `SCISSORS` to estimate a biologically meaningful subclustering that is to some degree supported by canonical marker genes from the literature. I'll note that while these monocyte subtype annotations might be useful, we didn't analyze the entire dataset;  those familiar with the PBMC3k dataset will know that what we labelled the CD8+ T cell cluster actually also contains NK cells. This analysis is not meant to be exhaustive or final, and serves mostly to show how and why `SCISSORS` is used. Please reach out to me with questions on the package [via email](mailto:jrleary@live.unc.edu), or by [opening an issueon the GitHub repository](https://github.com/jr-leary7/SCISSORS/issues). 
 
 # Session Info 
 

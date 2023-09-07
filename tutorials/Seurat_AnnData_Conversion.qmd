@@ -374,7 +374,9 @@ We read our data into Python, & do some necessary reformatting.
 # raw counts 
 RNA_counts = mmread('./conversion_files/RNA_counts.mtx').transpose().tocsr().astype('float64')
 # cell metadata
-cell_metadata = pd.read_csv('./conversion_files/cell_metadata.csv').rename(columns={'Cell_ID': 'cell'}).set_index('cell', drop=False)
+cell_metadata = pd.read_csv('./conversion_files/cell_metadata.csv') \
+                  .rename(columns={'Cell_ID': 'cell'}) \
+                  .set_index('cell', drop=False)
 cell_metadata['seurat_clusters'] = cell_metadata['seurat_clusters'].astype('category')
 cell_metadata['age'] = pd.Categorical(cell_metadata['age'].astype('str'), categories=['6', '7', '8', '9', '10', '11'])
 cat_cols = ['broad_celltype', 'Phase', 'Cell_type']
@@ -384,8 +386,12 @@ cell_names = pd.read_csv('./conversion_files/cells.csv').set_index('cell', drop=
 gene_names = pd.read_csv('./conversion_files/genes.csv').set_index('gene', drop=False)
 gene_mapping_table = pd.read_csv('./conversion_files/gene_mapping.csv').set_index('hgnc_symbol', drop=False)
 # reduced dimensional embeddings
-pca_embedding = pd.read_csv('./conversion_files/PCA.csv').set_index(pd.Index(cell_names['cell'])).to_numpy()
-umap_embedding = pd.read_csv('./conversion_files/UMAP.csv').set_index(pd.Index(cell_names['cell'])).to_numpy()
+pca_embedding = pd.read_csv('./conversion_files/PCA.csv') \
+                  .set_index(pd.Index(cell_names['cell'])) \
+                  .to_numpy()
+umap_embedding = pd.read_csv('./conversion_files/UMAP.csv') \
+                   .set_index(pd.Index(cell_names['cell'])) \
+                   .to_numpy()
 # KNN graphs
 knn_idx = pd.read_csv('./conversion_files/KNN_indices.csv').to_numpy().astype('int32') - 1
 knn_dist_mat = mmread('./conversion_files/KNN_distances.mtx').tocsr().astype('float64')
@@ -595,7 +601,9 @@ data.frame(cell = colnames(brain),
                       names_to = "gene", 
                       values_to = "expression") %>% 
   ggplot(aes(x = dpt, y = expression)) + 
-  facet_wrap(~gene, ncol = 2, nrow = 2) + 
+  facet_wrap(~gene, 
+             ncol = 2, 
+             nrow = 2) + 
   geom_point(aes(color = celltype), 
              size = 1, 
              alpha = 0.75) + 
