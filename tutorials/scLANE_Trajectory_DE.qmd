@@ -17,6 +17,7 @@ format:
     code-copy: true
     code-tools: true
     toc: true
+    toc-depth: 2
     embed-resources: true
     fig-format: retina
     fig-width: 9
@@ -65,7 +66,6 @@ We'll also define a couple utilities to make our plots cleaner to read & easier 
 
 ```{r}
 theme_umap <- function(base.size = 14) {
-  ggplot2::theme_classic(base_size = base.size) + 
   ggplot2::theme(axis.ticks = ggplot2::element_blank(), 
                  axis.text = ggplot2::element_blank(), 
                  plot.subtitle = ggplot2::element_text(face = "italic", size = 11), 
@@ -192,6 +192,7 @@ p0 <- DimPlot(seu,
               pt.size = 1, 
               cols = alpha(palette_cluster, 0.75)) + 
       labs(color = "Leiden Cluster") + 
+      theme_scLANE() + 
       theme_umap() + 
       theme(plot.title = element_blank(), 
             axis.title = element_blank(), 
@@ -204,12 +205,14 @@ p1 <- DimPlot(seu,
       labs(x = "UMAP 1", 
            y = "UMAP 2", 
            color = "Celltype") + 
+      theme_scLANE() + 
       theme_umap() + 
       theme(plot.title = element_blank()) + 
       guide_umap()
 p2 <- (p0 / p1) +
-      plot_annotation(title = "Murine Pancreatic Endocrinogenesis", 
-                      theme = theme_classic(base_size = 14))
+      plot_layout(guides = "collect") + 
+      plot_annotation(title = "Murine pancreatic endocrinogenesis", 
+                      theme = theme_scLANE())
 p2
 ```
 
@@ -245,12 +248,14 @@ p3 <- Embeddings(seu, "umap") %>%
       labs(color = "Pseudotime") + 
       scale_color_gradientn(colors = palette_heatmap, 
                             labels = scales::label_number(accuracy = 0.01)) + 
+      theme_scLANE() + 
       theme_umap() + 
       theme(axis.title = element_blank(), 
             axis.line.x = element_blank())
 p4 <- (p3 / p1) + 
-      plot_annotation(title = "Estimated Cell Ordering from Slingshot", 
-                      theme = theme_classic(base_size = 14))
+      plot_layout(guides = "collect") + 
+      plot_annotation(title = "Estimated cell ordering from Slingshot", 
+                      theme = theme_scLANE())
 p4
 ```
 
@@ -272,7 +277,7 @@ scLANE_res <- testDynamic(seu,
                           track.time = TRUE)
 ```
 
-After tidying the TDE results with `getResultsDE()`, we pull a sample of 10 genes from the results & display their test statistics. By default, any gene with an adjusted *p*-value less than 0.01 is predicted to be dynamic, though this threshold can be easily adjusted. 
+After tidying the TDE results with `getResultsDE()`, we pull a sample of 6 genes from the results & display their test statistics. By default, any gene with an adjusted *p*-value less than 0.01 is predicted to be dynamic, though this threshold can be easily adjusted. 
 
 ```{r}
 scLANE_res_tidy <- getResultsDE(scLANE_res)
@@ -304,6 +309,10 @@ p5 <- plotModels(scLANE_res,
       scale_color_manual(values = c("forestgreen"))
 p5
 ```
+
+# Downstream analysis 
+
+## Gene dynamics plots
 
 Using the `getFittedValues()` function allows us to generate predictions from the models we fit, which we then use to visualize the dynamics of a few genes that are known to be strongly associated with the differentiation of immature cells into mature endocrine phenotypes. For all four genes, the fitted models show knots chosen in the area of pseudotime around the pre-endocrine cells. This tells us that these driver genes are being upregulated in precursor celltypes & are driving differentiation into the mature celltypes such as alpha & beta cells, after which the genes are downregulated. 
 
@@ -346,15 +355,11 @@ p6 <- getFittedValues(scLANE_res,
       scale_color_manual(values = palette_celltype) + 
       labs(x = "Pseudotime", 
            y = "Normalized Expression", 
-           title = "Endrocrinogenesis Driver Genes Across Pseudotime", 
+           title = "Endrocrinogenesis driver genes across pseudotime", 
            subtitle = "scLANE piecewise negative binomial GLMs") + 
-      theme_classic(base_size = 14, 
-                    base_line_size = 0.75,
-                    base_rect_size = 0.75) + 
+      theme_scLANE() + 
       theme(legend.title = element_blank(), 
             strip.text.x = element_text(face = "italic"), 
-            strip.clip = "off", 
-            strip.background = element_rect(linewidth = 0.75), 
             plot.subtitle = element_text(face = "italic", size = 11)) + 
       guide_umap()
 p6
@@ -402,19 +407,17 @@ p7 <- getFittedValues(scLANE_res,
       scale_color_manual(values = palette_celltype) + 
       labs(x = "Pseudotime", 
            y = "Normalized Expression", 
-           title = "Endrocrinogenesis Driver Genes Across Pseudotime", 
+           title = "Endrocrinogenesis driver genes across pseudotime", 
            subtitle = "Cubic basis spline negative binomial GAMs") + 
-      theme_classic(base_size = 14, 
-                    base_line_size = 0.75,
-                    base_rect_size = 0.75) + 
+      theme_scLANE() + 
       theme(legend.title = element_blank(), 
             strip.text.x = element_text(face = "italic"), 
-            strip.clip = "off", 
-            strip.background = element_rect(linewidth = 0.75), 
             plot.subtitle = element_text(face = "italic", size = 11)) + 
       guide_umap()
 p7
 ```
+
+## Distribution of knot locations
 
 Let's take a broader view of the dataset by examining the distribution of adaptively chosen knots from our models. We limit the analysis to the set of genes determined to be dynamic. 
 
@@ -441,7 +444,7 @@ p8 <- ggplot(knot_df, aes(x = knot)) +
                    linewidth = 1) + 
       scale_x_continuous(limits = c(0, 1), labels = scales::label_number(accuracy = 0.1)) + 
       labs(x = "Knot Location") + 
-      theme_classic(base_size = 14) + 
+      theme_scLANE() + 
       theme(axis.title.y = element_blank(), 
             axis.text.y = element_blank(), 
             axis.ticks.y = element_blank())
@@ -453,16 +456,18 @@ p9 <- data.frame(celltype = seu$celltype,
       scale_fill_manual(values = palette_celltype) + 
       scale_color_manual(values = palette_celltype) + 
       labs(x = "Pseudotime") + 
-      theme_classic(base_size = 14) + 
+      theme_scLANE() + 
       theme(axis.title.y = element_blank(), 
             legend.title = element_blank()) + 
       guide_umap()
 p10 <- (p8 / p9) + 
        plot_layout(heights = c(1/4, 3/4)) + 
-       plot_annotation(title = "Distribution of Adaptively-chosen Knots from scLANE", 
-                       theme = theme_classic(base_size = 14))
+       plot_annotation(title = "Distribution of adaptively-chosen knots from scLANE", 
+                       theme = theme_scLANE())
 p10
 ```
+
+## Dynamic gene clustering
 
 We can extract a matrix of fitted values using `smoothedCountsMatrix()`; here we focus on the top 2,000 most dynamic genes, with the goal of identifying clusters of similarly-expressed genes. After reducing dimensionality with PCA, we cluster the genes using the Leiden algorithm & embed the genes in two dimensions with UMAP.  
 
@@ -508,11 +513,11 @@ p11 <- ggplot(gene_clust_df, aes(x = pc1, y = pc2, color = leiden)) +
             title = "Unsupervised Clustering of Dynamic Genes", 
             subtitle = "Top 2,000 TDE genes after PCA") +
        paletteer::scale_color_paletteer_d("ggsci::default_igv") + 
+       theme_scLANE() + 
        theme_umap() + 
        guide_umap()
 p11
 ```
-
 
 The UMAP embedding shows that even with the relatively small number of genes, clear patterns are visible. 
 
@@ -525,10 +530,13 @@ p12 <- ggplot(gene_clust_df, aes(x = umap1, y = umap2, color = leiden)) +
             title = "Unsupervised Clustering of Dynamic Genes", 
             subtitle = "Top 2,000 TDE genes after PCA") +
        paletteer::scale_color_paletteer_d("ggsci::default_igv") + 
+       theme_scLANE() + 
        theme_umap() + 
        guide_umap()
 p12
 ```
+
+## Expression cascades
 
 We can also plot a heatmap of the dynamic genes; this requires a bit of setup, for which we'll use the `ComplexHeatmap` package. We scale each gene, and clip values to be on $[-6, 6]$. The columns (cells) of the heatmap are ordered by estimated pseudotime, and the rows (genes) are ordered by expression peak. 
 
@@ -578,7 +586,7 @@ Heatmap(matrix = heatmap_mat,
         cluster_columns = FALSE,
         width = 12, 
         height = 6, 
-        column_title = "Dynamic Genes Across Pseudotime in Murine Pancreatic Endocrinogenesis",
+        column_title = "Dynamic genes across pseudotime in murine pancreatic endocrinogenesis",
         column_title_gp = gpar(fontface = "bold"), 
         cluster_rows = FALSE,
         top_annotation = col_anno, 
@@ -589,6 +597,8 @@ Heatmap(matrix = heatmap_mat,
         raster_by_magick = TRUE, 
         raster_quality = 5)
 ```
+
+## Enrichment analysis & gene programs
 
 Using our gene clusters & the `{gprofiler2}` package, we run an enrichment analysis against [the biological process (BP) set of gene ontologies](http://geneontology.org/docs/ontology-documentation/). 
 
@@ -606,7 +616,7 @@ enrich_res <- gprofiler2::gost(gene_clust_list,
                                significant = TRUE)
 ```
 
-A look at the top 3 most-significant GO terms for each gene cluster reveals heterogeneous functionalities across groups of genes:
+A look at the top 3 most-significant GO terms for each gene cluster reveals heterogeneous functionalities across groups of genes. Cluster 1 in particular looks interesting; it shows significant enrichment of peptide regulation-related processes. 
 
 ```{r}
 mutate(enrich_res$result, 
@@ -623,6 +633,45 @@ mutate(enrich_res$result,
                                 "Query Size", "Intersection Size", "Term ID")) %>% 
   kableExtra::kable_classic(c("hover"), full_width = FALSE)
 ```
+
+We isolate the genes from cluster 1, then create a per-cell module score for genes in that set. In effect, this will allow us to associate certain gene programs with certain celltypes. 
+
+```{r}
+peptide_gene_program <- filter(gene_clust_df, leiden == 1) %>% 
+                        pull(gene)
+seu <- AddModuleScore(seu, 
+                      features = list(peptide = peptide_gene_program), 
+                      assay = "spliced", 
+                      name = "peptide_program_score", 
+                      seed = 312)
+```
+
+Visualizing the scores on our UMAP embedding shows us that the peptide program is most highly-enriched in mature endocrine cells. This makes sense biologically as mature endocrine celltypes' primary roles are to produce peptides such as glucagon (alpha cells), insulin (beta cells), somatostatin (ductal cells), and pancreatic polypeptide (gamma cells). 
+
+```{r}
+p13 <- Embeddings(seu, "umap") %>% 
+       as.data.frame() %>% 
+       magrittr::set_colnames(c("UMAP_1", "UMAP_2")) %>% 
+       mutate(peptide_program_score = seu$peptide_program_score1) %>% 
+       ggplot(aes(x = UMAP_1, y = UMAP_2, color = peptide_program_score)) + 
+       geom_point(size = 1, alpha = 0.75) + 
+       labs(color = "Gene Program Score") + 
+       scale_color_gradientn(colors = palette_heatmap, 
+                             labels = scales::label_number(accuracy = 0.01)) + 
+       theme_scLANE() + 
+       theme_umap() + 
+       theme(axis.title = element_blank(), 
+             axis.line.x = element_blank())
+p14 <- (p13 / p1) + 
+       plot_layout(guides = "collect") + 
+       plot_annotation(title = "Enrichment of peptide regulation gene program", 
+                       theme = theme_scLANE())
+p14
+```
+
+# Conclusions
+
+Hopefully this vignette has been a useful introduction to running the `scLANE` software and using its outputs to help better understand biology at single-cell resolution. If you have questions about how the models work or are interpreted, software issues, or simply want to compare results feel free to open an issue on [the GitHub repository](https://github.com/jr-leary7/scLANE), or reach out via email to <j.leary@ufl.edu>. 
 
 # Session Info 
 
