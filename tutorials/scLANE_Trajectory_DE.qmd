@@ -88,7 +88,7 @@ palette_heatmap <- paletteer::paletteer_d("wesanderson::Zissou1")
 
 We'll load the well-known pancreatic endocrinogenesis data from [Bastidas-Ponce *et al* (2019)](https://doi.org/10.1242/dev.173849), which comes with the `scVelo` Python library & has been used in several pseudotime inference / RNA velocity method papers as a good benchmark dataset due to the simplicity of the underlying trajectory manifold. 
 
-```{python, resuls='hide'}
+```{python, results='hide'}
 import scvelo as scv
 adata = scv.datasets.pancreas()
 ```
@@ -187,10 +187,15 @@ seu <- PercentageFeatureSet(seu,
 Let's visualize the results on our UMAP embedding. The clustering generally agrees with the celltype labels, though there is some overclustering in the ductal cells & underclustering in the mature endocrine celltypes. 
 
 ```{r}
-p0 <- DimPlot(seu, 
-              group.by = "seurat_clusters", 
-              pt.size = 1, 
-              cols = alpha(palette_cluster, 0.75)) + 
+p0 <- Embeddings(seu, "umap") %>% 
+      as.data.frame() %>% 
+      magrittr::set_colnames(c("UMAP_1", "UMAP_2")) %>% 
+      mutate(leiden = seu$seurat_clusters) %>% 
+      ggplot(aes(x = UMAP_1, y = UMAP_2, color = leiden)) + 
+      geom_point(size = 1.5, 
+                 alpha = 0.75, 
+                 stroke = 0) + 
+      scale_color_manual(values = palette_cluster) + 
       labs(color = "Leiden Cluster") + 
       theme_scLANE() + 
       theme_umap() + 
@@ -198,10 +203,15 @@ p0 <- DimPlot(seu,
             axis.title = element_blank(), 
             axis.line.x = element_blank()) + 
       guide_umap()
-p1 <- DimPlot(seu, 
-              group.by = "celltype", 
-              pt.size = 1, 
-              cols = alpha(palette_celltype, 0.75)) + 
+p1 <- Embeddings(seu, "umap") %>% 
+      as.data.frame() %>% 
+      magrittr::set_colnames(c("UMAP_1", "UMAP_2")) %>% 
+      mutate(celltype = seu$celltype) %>% 
+      ggplot(aes(x = UMAP_1, y = UMAP_2, color = celltype)) + 
+      geom_point(size = 1.5, 
+                 alpha = 0.75, 
+                 stroke = 0) + 
+      scale_color_manual(values = palette_celltype) + 
       labs(x = "UMAP 1", 
            y = "UMAP 2", 
            color = "Celltype") + 
@@ -244,7 +254,9 @@ p3 <- Embeddings(seu, "umap") %>%
       magrittr::set_colnames(c("UMAP_1", "UMAP_2")) %>% 
       mutate(PT = sling_pt$PT) %>% 
       ggplot(aes(x = UMAP_1, y = UMAP_2, color = PT)) + 
-      geom_point(size = 1, alpha = 0.75) + 
+      geom_point(size = 1.5, 
+                 alpha = 0.75, 
+                 stroke = 0) + 
       labs(color = "Pseudotime") + 
       scale_color_gradientn(colors = palette_heatmap, 
                             labels = scales::label_number(accuracy = 0.01)) + 
@@ -327,7 +339,10 @@ p6 <- getFittedValues(scLANE_res,
       facet_wrap(~gene, 
                  ncol = 2, 
                  scales = "free_y") + 
-      geom_point(aes(color = celltype), size = 1, alpha = 0.75) + 
+      geom_point(aes(color = celltype), 
+                 size = 2, 
+                 alpha = 0.75, 
+                 stroke = 0) + 
       geom_vline(data = data.frame(gene = "Chga", knot = unique(scLANE_res$Chga$Lineage_A$MARGE_Slope_Data$Breakpoint)), 
                  mapping = aes(xintercept = knot), 
                  linetype = "dashed", 
@@ -395,7 +410,10 @@ p7 <- getFittedValues(scLANE_res,
       facet_wrap(~gene, 
                  ncol = 2, 
                  scales = "free_y") + 
-      geom_point(aes(color = celltype), size = 1, alpha = 0.75) + 
+      geom_point(aes(color = celltype), 
+                 size = 2, 
+                 alpha = 0.75, 
+                 stroke = 0) + 
       geom_ribbon(aes(ymin = GAM_ci_ll_log1p, ymax = GAM_ci_ul_log1p), 
                   linewidth = 0, 
                   fill = "grey70", 
@@ -506,7 +524,7 @@ First we'll visualize the gene clusters on the first two PCs.
 
 ```{r}
 p11 <- ggplot(gene_clust_df, aes(x = pc1, y = pc2, color = leiden)) + 
-       geom_point(size = 1, alpha = 0.75) + 
+       geom_point(size = 2, alpha = 0.75, stroke = 0) + 
        labs(x = "PC 1", 
             y = "PC 2", 
             color = "Leiden Cluster", 
@@ -523,7 +541,7 @@ The UMAP embedding shows that even with the relatively small number of genes, cl
 
 ```{r}
 p12 <- ggplot(gene_clust_df, aes(x = umap1, y = umap2, color = leiden)) + 
-       geom_point(size = 1, alpha = 0.75) + 
+       geom_point(size = 2, alpha = 0.75, stroke = 0) + 
        labs(x = "UMAP 1", 
             y = "UMAP 2", 
             color = "Leiden Cluster", 
@@ -616,7 +634,7 @@ enrich_res <- gprofiler2::gost(gene_clust_list,
                                significant = TRUE)
 ```
 
-A look at the top 3 most-significant GO terms for each gene cluster reveals heterogeneous functionalities across groups of genes. Cluster 1 in particular looks interesting; it shows significant enrichment of peptide regulation-related processes. 
+A look at the top 3 most-significant GO terms for each gene cluster reveals heterogeneous functionalities across groups of genes. Cluster `r mutate(enrich_res$result, query = gsub("Leiden_", "", query)) %>% filter(grepl("peptide", term_name)) %>% arrange(p_value) %>% slice_head(n = 1) %>% pull(query)` in particular looks interesting; it shows significant enrichment of peptide regulation-related processes. 
 
 ```{r}
 mutate(enrich_res$result, 
@@ -634,10 +652,17 @@ mutate(enrich_res$result,
   kableExtra::kable_classic(c("hover"), full_width = FALSE)
 ```
 
-We isolate the genes from cluster 1, then create a per-cell module score for genes in that set. In effect, this will allow us to associate certain gene programs with certain celltypes. 
+We isolate the genes from cluster `r mutate(enrich_res$result, query = gsub("Leiden_", "", query)) %>% filter(grepl("peptide", term_name)) %>% arrange(p_value) %>% slice_head(n = 1) %>% pull(query)`, then create a per-cell module score for genes in that set. In effect, this will allow us to associate certain gene programs with certain celltypes. 
 
 ```{r}
-peptide_gene_program <- filter(gene_clust_df, leiden == 1) %>% 
+peptide_cluster <- mutate(enrich_res$result, 
+                          query = gsub("Leiden_", "", query)) %>% 
+                   filter(grepl("peptide", term_name)) %>% 
+                   arrange(p_value) %>% 
+                   slice_head(n = 1) %>% 
+                   pull(query)
+peptide_gene_program <- filter(gene_clust_df, 
+                               leiden == peptide_cluster) %>% 
                         pull(gene)
 seu <- AddModuleScore(seu, 
                       features = list(peptide = peptide_gene_program), 
@@ -654,7 +679,7 @@ p13 <- Embeddings(seu, "umap") %>%
        magrittr::set_colnames(c("UMAP_1", "UMAP_2")) %>% 
        mutate(peptide_program_score = seu$peptide_program_score1) %>% 
        ggplot(aes(x = UMAP_1, y = UMAP_2, color = peptide_program_score)) + 
-       geom_point(size = 1, alpha = 0.75) + 
+       geom_point(size = 1.5, alpha = 0.75, stroke = 0) + 
        labs(color = "Gene Program Score") + 
        scale_color_gradientn(colors = palette_heatmap, 
                              labels = scales::label_number(accuracy = 0.01)) + 
@@ -669,9 +694,26 @@ p14 <- (p13 / p1) +
 p14
 ```
 
+We can also visualize the trend in the peptide program scores over time, which confirms the biological conclusions we came to by inspecting the UMAPs. 
+
+```{r}
+p15 <- data.frame(PT = sling_pt$PT, 
+                  peptide_program_score = seu$peptide_program_score1, 
+                  celltype = seu$celltype) %>% 
+       ggplot(aes(x = PT, y = peptide_program_score, color = celltype)) + 
+       geom_point(alpha = 0.75, stroke = 0, size = 2) + 
+       geom_smooth(color = "black", method = "loess") + 
+       scale_color_manual(values = palette_celltype) + 
+       labs(x = "Pseudotime", y = "Peptide Program Score") + 
+       theme_scLANE() + 
+       theme(legend.title = element_blank()) + 
+       guide_umap()
+p15
+```
+
 # Conclusions
 
-Hopefully this vignette has been a useful introduction to running the `scLANE` software and using its outputs to help better understand biology at single-cell resolution. If you have questions about how the models work or are interpreted, software issues, or simply want to compare results feel free to open an issue on [the GitHub repository](https://github.com/jr-leary7/scLANE), or reach out via email to <j.leary@ufl.edu>. 
+Hopefully this vignette has been a useful introduction to running the `scLANE` software and using its outputs to help better understand biology at single-cell resolution. If you have questions about how the models work or are interpreted, software issues, or simply want to compare results feel free to open an issue on [the GitHub repository](https://github.com/jr-leary7/scLANE) or reach out via email to <j.leary@ufl.edu>. 
 
 # Session Info 
 
