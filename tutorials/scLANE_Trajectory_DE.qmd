@@ -36,7 +36,7 @@ reticulate::use_virtualenv("~/Desktop/Python/science/venv/", required = TRUE)
 
 # Introduction 
 
-In this tutorial we'll walk through a basic trajectory differential expression analysis. We'll use the `scLANE` R package, which we developed with the goal of providing accurate and biologically interpretable models of expression over pseudotime. At the end are a list of references we used in developing the method & writing the accompanying manuscript, as well as the poster I presented at [ENAR 2023](https://www.enar.org/meetings/spring2023/) in Nashville.
+In this tutorial we'll walk through a basic trajectory differential expression analysis. We'll use the `scLANE` R package, which we developed with the goal of providing accurate and biologically interpretable models of expression over pseudotime. At the end are some best-practices recommendations, along with a short list of references we used in developing the method & writing the accompanying manuscript. 
 
 # Libraries 
 
@@ -65,11 +65,11 @@ rename <- dplyr::rename
 We'll also define a couple utilities to make our plots cleaner to read & easier to make. 
 
 ```{r}
-theme_umap <- function(base.size = 14) {
+theme_umap <- function(base.size = 12) {
   ggplot2::theme(axis.ticks = ggplot2::element_blank(), 
                  axis.text = ggplot2::element_blank(), 
-                 plot.subtitle = ggplot2::element_text(face = "italic", size = 11), 
-                 plot.caption = ggplot2::element_text(face = "italic", size = 11))
+                 plot.subtitle = ggplot2::element_text(face = "italic", size = 9), 
+                 plot.caption = ggplot2::element_text(face = "italic", size = 9))
 }
 guide_umap <- function(key.size = 4) {
   ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = key.size, alpha = 1)))
@@ -285,7 +285,7 @@ scLANE_res <- testDynamic(seu,
                           pt = sling_pt, 
                           genes = top3k_hvg, 
                           size.factor.offset = cell_offset, 
-                          n.cores = 4, 
+                          n.cores = 6, 
                           track.time = TRUE)
 ```
 
@@ -303,13 +303,13 @@ select(scLANE_res_tidy,
   with_groups(Gene_Dynamic_Overall, 
               slice_sample, 
               n = 3) %>% 
-  kableExtra::kbl(digits = 5, 
+  kableExtra::kbl(digits = 4, 
                   booktabs = TRUE, 
-                  col.names = c("Gene", "LRT Statistic", "P-value", "Adj. P-value", "Predicted Gene Status")) %>% 
+                  col.names = c("Gene", "LRT stat.", "P-value", "Adj. p-value", "Predicted gene status")) %>% 
   kableExtra::kable_classic(full_width = FALSE, "hover")
 ```
 
-Next, we can use the `plotModels()` function to visualize the fitted models from `scLANE` and compare them to other modeling methods. The gene [*Neurog3*](https://www.ncbi.nlm.nih.gov/gene/11925) is strongly associated with epithelial cell differentiation, and indeed we see a very clear, nonlinear transcriptional dynamic across pseudotime for that gene. A traditional GLM fails to capture that nonlinearity, and while a GAM fits the trend smoothly, it fails to capture the sharpness of the transcriptional switch that occurs halfway through the trajectory. Only the `scLANE` model accurately models the rapid upregulation and equally swift downregulation of *Neurog3* over pseudotime, in addition to identifying the cutpoint in pseudotime at which downregulation begins. 
+Next, we can use the `plotModels()` function to visualize the fitted models from `scLANE` and compare them to other modeling methods. The gene [*Neurog3*](https://www.ncbi.nlm.nih.gov/gene/11925) is strongly associated with epithelial cell differentiation, and indeed we see a clear, nonlinear transcriptional dynamic across pseudotime for that gene. A traditional GLM fails to capture that nonlinearity, and while a GAM fits the trend smoothly, it seems to overfit the dynamics near the boundaries of pseudotime - [a known issue with additive models](https://www.routledge.com/Generalized-Additive-Models-An-Introduction-with-R-Second-Edition/Wood/p/book/9781498728331). Only the `scLANE` model accurately models the rapid upregulation and equally swift downregulation of *Neurog3* over pseudotime, in addition to identifying the cutpoint in pseudotime at which downregulation begins. 
 
 ```{r, fig.width=9, fig.height=5}
 p5 <- plotModels(scLANE_res, 
@@ -317,7 +317,8 @@ p5 <- plotModels(scLANE_res,
                  pt = sling_pt, 
                  expr.mat = seu, 
                  size.factor.offset = cell_offset, 
-                 plot.null = FALSE) + 
+                 plot.glm = TRUE, 
+                 plot.gam = TRUE) + 
       scale_color_manual(values = c("forestgreen"))
 p5
 ```
@@ -442,25 +443,22 @@ Let's take a broader view of the dataset by examining the distribution of adapti
 ```{r}
 dyn_genes <- filter(scLANE_res_tidy, Gene_Dynamic_Overall == 1) %>% 
              pull(Gene)
-knot_df <- purrr::imap(scLANE_res[dyn_genes], 
-                       \(x, y) {
-                         data.frame(
-                           gene = y, 
-                           knot = x$Lineage_A$MARGE_Slope_Data$Breakpoint
-                         )
-                       }) %>% 
-           purrr::reduce(rbind)
+knot_df <- getKnotDist(scLANE_res, dyn_genes)
 ```
 
 We'll plot a histogram of the knot values along with a ridgeplot of the pseudotime distribution for each celltype. We see that the majority of the selected knots are placed at the beginning of the trajectory, around where the ductal cells transition into endocrine progenitors. A smaller set of knots is placed about halfway through the trajectory, which we've annotated as the point at which pre-endocrine cells begin differentiating into mature endocrine phenotypes. 
 
 ```{r, fig.width=9, fig.height=6}
 p8 <- ggplot(knot_df, aes(x = knot)) + 
+      geom_histogram(aes(y = after_stat(density)), 
+                     color = "black", 
+                     fill = "white", 
+                     linewidth = 0.5) + 
       geom_density(fill = "deepskyblue3", 
-                   alpha = 0.75, 
+                   alpha = 0.5, 
                    color = "deepskyblue4", 
                    linewidth = 1) + 
-      scale_x_continuous(limits = c(0, 1), labels = scales::label_number(accuracy = 0.1)) + 
+      scale_x_continuous(limits = c(0, 1), labels = scales::label_number(accuracy = 0.01)) + 
       labs(x = "Knot Location") + 
       theme_scLANE() + 
       theme(axis.title.y = element_blank(), 
@@ -470,7 +468,7 @@ p9 <- data.frame(celltype = seu$celltype,
                  pt = seu$sling_pt) %>% 
       ggplot(aes(x = pt, y = celltype, fill = celltype, color = celltype)) + 
       ggridges::geom_density_ridges(alpha = 0.75, size = 1, scale = 0.95) + 
-      scale_x_continuous(labels = scales::label_number(accuracy = 0.1), limits = c(0, 1)) + 
+      scale_x_continuous(labels = scales::label_number(accuracy = 0.01), limits = c(0, 1)) + 
       scale_fill_manual(values = palette_celltype) + 
       scale_color_manual(values = palette_celltype) + 
       labs(x = "Pseudotime") + 
@@ -487,7 +485,7 @@ p10
 
 ## Dynamic gene clustering
 
-We can extract a matrix of fitted values using `smoothedCountsMatrix()`; here we focus on the top 2,000 most dynamic genes, with the goal of identifying clusters of similarly-expressed genes. After reducing dimensionality with PCA, we cluster the genes using the Leiden algorithm & embed the genes in two dimensions with UMAP.  
+We can extract a matrix of fitted values using `smoothedCountsMatrix()`; here we focus on the top 2,000 most dynamic genes, with the goal of identifying clusters of similarly-expressed genes. Next, the `embedGenes()` function reduces dimensionality with PCA, clusters the genes using the Leiden algorithm, & embeds the genes in two dimensions with UMAP.  
 
 ```{r}
 smoothed_counts <- smoothedCountsMatrix(scLANE_res, 
@@ -495,40 +493,20 @@ smoothed_counts <- smoothedCountsMatrix(scLANE_res,
                                         genes = dyn_genes[1:2000], 
                                         size.factor.offset = cell_offset, 
                                         n.cores = 2)
-set.seed(312)
-smoothed_counts_pca <- irlba::prcomp_irlba(t(smoothed_counts$Lineage_A), 
-                                           n = 30, 
-                                           center = TRUE, 
-                                           scale. = TRUE)
-smoothed_counts_umap <- uwot::umap(smoothed_counts_pca$x, 
-                                   n_components = 2, 
-                                   metric = "cosine", 
-                                   n_neighbors = 20, 
-                                   init = "spectral")
-smoothed_counts_snn <- bluster::makeSNNGraph(smoothed_counts_pca$x, 
-                                             k = 20, 
-                                             type = "jaccard", 
-                                             BNPARAM = BiocNeighbors::AnnoyParam(distance = "Cosine"))
-smoothed_counts_clust <- igraph::cluster_leiden(smoothed_counts_snn, 
-                                                objective_function = "modularity", 
-                                                resolution_parameter = 0.3)
-gene_clust_df <- data.frame(gene = colnames(smoothed_counts$Lineage_A), 
-                            pc1 = smoothed_counts_pca$x[, 1], 
-                            pc2 = smoothed_counts_pca$x[, 2], 
-                            umap1 = smoothed_counts_umap[, 1], 
-                            umap2 = smoothed_counts_umap[, 2], 
-                            leiden = as.factor(smoothed_counts_clust$membership - 1L))
+gene_embed <- embedGenes(smoothed_counts$Lineage_A, 
+                         k.param = 20, 
+                         resolution.param = 0.5)
 ```
 
 First we'll visualize the gene clusters on the first two PCs. 
 
 ```{r}
-p11 <- ggplot(gene_clust_df, aes(x = pc1, y = pc2, color = leiden)) + 
+p11 <- ggplot(gene_embed, aes(x = pc1, y = pc2, color = leiden)) + 
        geom_point(size = 2, alpha = 0.75, stroke = 0) + 
        labs(x = "PC 1", 
             y = "PC 2", 
             color = "Leiden Cluster", 
-            title = "Unsupervised Clustering of Dynamic Genes", 
+            title = "Unsupervised clustering of dynamic genes", 
             subtitle = "Top 2,000 TDE genes after PCA") +
        paletteer::scale_color_paletteer_d("ggsci::default_igv") + 
        theme_scLANE() + 
@@ -540,12 +518,12 @@ p11
 The UMAP embedding shows that even with the relatively small number of genes, clear patterns are visible. 
 
 ```{r}
-p12 <- ggplot(gene_clust_df, aes(x = umap1, y = umap2, color = leiden)) + 
+p12 <- ggplot(gene_embed, aes(x = umap1, y = umap2, color = leiden)) + 
        geom_point(size = 2, alpha = 0.75, stroke = 0) + 
        labs(x = "UMAP 1", 
             y = "UMAP 2", 
             color = "Leiden Cluster", 
-            title = "Unsupervised Clustering of Dynamic Genes", 
+            title = "Unsupervised clustering of dynamic genes", 
             subtitle = "Top 2,000 TDE genes after PCA") +
        paletteer::scale_color_paletteer_d("ggsci::default_igv") + 
        theme_scLANE() + 
@@ -582,9 +560,9 @@ col_anno <- HeatmapAnnotation(Celltype = col_anno_df$celltype,
                               show_annotation_name = FALSE, 
                               gap = unit(1, "mm"), 
                               border = TRUE)
-palette_cluster_hm <- as.character(paletteer::paletteer_d("ggsci::default_igv")[1:length(unique(gene_clust_df$leiden))])
-names(palette_cluster_hm) <- as.character(unique(gene_clust_df$leiden))
-row_anno <- HeatmapAnnotation(Cluster = as.factor(gene_clust_df$leiden), 
+palette_cluster_hm <- as.character(paletteer::paletteer_d("ggsci::default_igv")[1:length(unique(gene_embed$leiden))])
+names(palette_cluster_hm) <- as.character(unique(gene_embed$leiden))
+row_anno <- HeatmapAnnotation(Cluster = as.factor(gene_embed$leiden), 
                               col = list(Cluster = palette_cluster_hm), 
                               show_legend = TRUE, 
                               show_annotation_name = FALSE, 
@@ -605,7 +583,6 @@ Heatmap(matrix = heatmap_mat,
         width = 12, 
         height = 6, 
         column_title = "Dynamic genes across pseudotime in murine pancreatic endocrinogenesis",
-        column_title_gp = gpar(fontface = "bold"), 
         cluster_rows = FALSE,
         top_annotation = col_anno, 
         left_annotation = row_anno, 
@@ -618,23 +595,25 @@ Heatmap(matrix = heatmap_mat,
 
 ## Enrichment analysis & gene programs
 
-Using our gene clusters & the `{gprofiler2}` package, we run an enrichment analysis against [the biological process (BP) set of gene ontologies](http://geneontology.org/docs/ontology-documentation/). 
+Using our gene clusters & the `gprofiler2` package, we run an enrichment analysis against [the biological process (BP) set of gene ontologies](http://geneontology.org/docs/ontology-documentation/). We make sure to order the genes in each cluster by their test statistics by joining to the results table from `scLANE`. 
 
 ```{r}
-gene_clust_list <- purrr::map(unique(gene_clust_df$leiden), \(x) { 
-  filter(gene_clust_df, leiden == x) %>% 
+gene_clust_list <- purrr::map(unique(gene_embed$leiden), \(x) { 
+  filter(gene_embed, leiden == x) %>% 
+  inner_join(scLANE_res_tidy, by = c("gene" = "Gene")) %>% 
+  arrange(desc(Test_Stat)) %>% 
   pull(gene)
 }) 
-names(gene_clust_list) <- paste0("Leiden_", unique(gene_clust_df$leiden))
+names(gene_clust_list) <- paste0("Leiden_", unique(gene_embed$leiden))
 enrich_res <- gprofiler2::gost(gene_clust_list, 
                                organism = "mmusculus", 
-                               ordered_query = FALSE, 
+                               ordered_query = TRUE, 
                                multi_query = FALSE, 
                                sources = "GO:BP", 
                                significant = TRUE)
 ```
 
-A look at the top 3 most-significant GO terms for each gene cluster reveals heterogeneous functionalities across groups of genes. Cluster `r mutate(enrich_res$result, query = gsub("Leiden_", "", query)) %>% filter(grepl("peptide", term_name)) %>% arrange(p_value) %>% slice_head(n = 1) %>% pull(query)` in particular looks interesting; it shows significant enrichment of peptide regulation-related processes. 
+A look at the top 3 most-significant GO terms for each gene cluster reveals heterogeneous functionalities across groups of genes.
 
 ```{r}
 mutate(enrich_res$result, 
@@ -644,15 +623,15 @@ mutate(enrich_res$result,
               slice_head,
               n = 3) %>% 
   select(cluster, term_name, p_value, term_size, query_size, intersection_size, term_id) %>% 
-  kableExtra::kbl(digits = 5, 
+  kableExtra::kbl(digits = 3, 
                   booktabs = TRUE, 
-                  caption = "<i>Top 3 Biological Process GO Terms per Cluster<\\i>", 
+                  caption = "<i>Top 3 biological process GO terms per cluster<\\i>", 
                   col.names = c("Gene Cluster", "Term Name", "Adj. P-value", "Term Size", 
                                 "Query Size", "Intersection Size", "Term ID")) %>% 
   kableExtra::kable_classic(c("hover"), full_width = FALSE)
 ```
 
-We isolate the genes from cluster `r mutate(enrich_res$result, query = gsub("Leiden_", "", query)) %>% filter(grepl("peptide", term_name)) %>% arrange(p_value) %>% slice_head(n = 1) %>% pull(query)`, then create a per-cell module score for genes in that set. In effect, this will allow us to associate certain gene programs with certain celltypes. 
+The terminal celltypes in this dataset excrete different types of peptides, and it stands to reason that one of the gene clusters might be associated with peptide production pathways. We isolate the genes from cluster `r mutate(enrich_res$result, query = gsub("Leiden_", "", query)) %>% filter(grepl("peptide", term_name)) %>% arrange(p_value) %>% slice_head(n = 1) %>% pull(query)`, which has the highest significance for peptide-related pathways, then create a per-cell module score for genes in that set. In effect, this will allow us to associate certain gene programs with certain celltypes. 
 
 ```{r}
 peptide_cluster <- mutate(enrich_res$result, 
@@ -661,7 +640,7 @@ peptide_cluster <- mutate(enrich_res$result,
                    arrange(p_value) %>% 
                    slice_head(n = 1) %>% 
                    pull(query)
-peptide_gene_program <- filter(gene_clust_df, 
+peptide_gene_program <- filter(gene_embed, 
                                leiden == peptide_cluster) %>% 
                         pull(gene)
 seu <- AddModuleScore(seu, 
@@ -671,7 +650,7 @@ seu <- AddModuleScore(seu,
                       seed = 312)
 ```
 
-Visualizing the scores on our UMAP embedding shows us that the peptide program is most highly-enriched in mature endocrine cells. This makes sense biologically as mature endocrine celltypes' primary roles are to produce peptides such as glucagon (alpha cells), insulin (beta cells), somatostatin (ductal cells), and pancreatic polypeptide (gamma cells). 
+Visualizing the scores on our UMAP embedding shows us that the peptide program is highly-enriched only in mature endocrine cells. This makes sense biologically as mature endocrine celltypes' primary roles are to produce peptides such as glucagon (alpha cells), insulin (beta cells), somatostatin (ductal cells), and pancreatic polypeptide (gamma cells). 
 
 ```{r}
 p13 <- Embeddings(seu, "umap") %>% 
@@ -680,9 +659,9 @@ p13 <- Embeddings(seu, "umap") %>%
        mutate(peptide_program_score = seu$peptide_program_score1) %>% 
        ggplot(aes(x = UMAP_1, y = UMAP_2, color = peptide_program_score)) + 
        geom_point(size = 1.5, alpha = 0.75, stroke = 0) + 
-       labs(color = "Gene Program Score") + 
+       labs(color = "Program Score") + 
        scale_color_gradientn(colors = palette_heatmap, 
-                             labels = scales::label_number(accuracy = 0.01)) + 
+                             labels = scales::label_number(accuracy = 0.1)) + 
        theme_scLANE() + 
        theme_umap() + 
        theme(axis.title = element_blank(), 
@@ -714,6 +693,14 @@ p15
 # Conclusions
 
 Hopefully this vignette has been a useful introduction to running the `scLANE` software and using its outputs to help better understand biology at single-cell resolution. If you have questions about how the models work or are interpreted, software issues, or simply want to compare results feel free to open an issue on [the GitHub repository](https://github.com/jr-leary7/scLANE) or reach out via email to <j.leary@ufl.edu>. 
+
+# References
+
+1. Bastidas-Ponce, Aimée *et al*. [Comprehensive single cell mRNA profiling reveals a detailed roadmap for pancreatic endocrinogenesis](https://doi.org/10.1242/dev.173849). *Development* (2019).
+
+2. Street, Kelly *et al*. [Slingshot: cell lineage and pseudotime inference for single-cell transcriptomics](https://doi.org/10.1186/s12864-018-4772-0). *BMC Genomics* (2018). 
+
+3. Stoklosa, Jakub & David Warton. [A generalized estimating equation approach to multivariate adaptive regression splines](https://doi.org/10.1080/10618600.2017.1360780). *Journal of Computational and Graphical Statistics* (2018). 
 
 # Session Info 
 
