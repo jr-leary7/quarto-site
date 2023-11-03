@@ -1,0 +1,1094 @@
+---
+title: "Analyzing Transcriptional Dynamics with `CellRank`"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  orcid: 0009-0004-8821-3269
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: today
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    embed-resources: true
+    fig-format: retina
+    df-print: kable
+    link-external-newwindow: true
+    fig-cap-location: bottom
+    fig-align: center
+execute: 
+  cache: false
+  freeze: auto
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, 
+                      comment = NA, 
+                      fig.retina = TRUE)
+reticulate::use_virtualenv("~/Desktop/PhD/Research/Python_Envs/personal_site/", required = TRUE)
+```
+
+# Introduction
+
+In this analysis we'll use `CellRank` to identify multiple cell fates in pancreatic endocrinogenesis data by combining RNA velocity, pseudotime, & developmental potential information. The goal is to showcase a more advanced analysis that incorporates multiple modalities to infer a confident final trajectory.
+
+# Libraries
+
+```{python}
+import warnings                  # filter out warnings
+import numpy as np               # matrix utilities
+import scanpy as sc              # scRNA-seq processing
+import pandas as pd              # dataframe tools
+import scvelo as scv             # RNA velocity estimation
+import anndata as ad             # scRNA-seq data structures
+import cellrank as cr            # cell fate estimation
+import matplotlib.pyplot as plt  # plot utilities
+```
+
+```{python}
+warnings.simplefilter('ignore', category=UserWarning)
+```
+
+# Theme for `matplotlib`
+
+```{python}
+base_size = 12
+plt.rcParams.update({
+    # font
+    'font.size': base_size, 
+    'font.weight': 'normal',
+    # figure
+    'figure.dpi': 320, 
+    'figure.edgecolor': 'white', 
+    'figure.facecolor': 'white', 
+    'figure.figsize': (6, 4), 
+    # axes
+    'axes.edgecolor': 'black',
+    'axes.grid': False,
+    'axes.labelpad': 2.75,
+    'axes.labelsize': base_size * 0.8,
+    'axes.linewidth': 1.5,
+    'axes.spines.right': False,
+    'axes.spines.top': False,
+    'axes.titlelocation': 'left',
+    'axes.titlepad': 11,
+    'axes.titlesize': base_size,
+    'axes.titleweight': 'normal',
+    'axes.xmargin': 0.1, 
+    'axes.ymargin': 0.1, 
+    # legend
+    'legend.borderaxespad': 1,
+    'legend.borderpad': 0.5,
+    'legend.columnspacing': 2,
+    'legend.fontsize': base_size * 0.8,
+    'legend.frameon': False,
+    'legend.handleheight': 1,
+    'legend.handlelength': 1.2,
+    'legend.labelspacing': 1,
+    'legend.title_fontsize': base_size, 
+    'legend.markerscale': 1.25
+})
+```
+
+# Data 
+
+First, we load the data from [Bastidas-Ponce *et al* (2019)](https://doi.org/10.1242/dev.173849). This dataset is comprised of murine pancreas cells from timepoint E15.5, and includes both spliced & unspliced mRNA counts. 
+
+```{python}
+#| results: hide
+ad_panc = scv.datasets.pancreas()
+ad_panc.raw = ad_panc
+```
+
+```{r, echo=FALSE, results='hide'}
+if (dir.exists("./data")) {
+  system("rm -rf ./data")
+}
+```
+
+# Analysis 
+
+## Preprocessing
+
+### HVG Selection & Normalization
+
+We begin by filtering out cells that have fewer than 20 total counts between the spliced & unspliced assays. Next, we select the top 3,000 most highly variable genes (HVGs), after which we normalize the counts using a log1p-transform. Lastly, we use the cell cycle gene sets from [Tirosh *et al* (2016)](https://doi.org/10.1126/science.aad0501) to assign S-phase and G2M-phase scores to each cell in order to identify populations of cycling cells. Cell cycle variation is not always of biological interest, and can prevent trajectory structures from being as clean or simple as we'd like. 
+
+```{python}
+#| results: hold
+scv.pp.filter_and_normalize(
+    ad_panc, 
+    min_shared_counts=20, 
+    n_top_genes=3000,
+    flavor='seurat',  
+    subset_highly_variable=False, 
+    log=False
+)
+sc.pp.log1p(ad_panc)
+scv.tl.score_genes_cell_cycle(ad_panc)
+```
+
+### PCA Embedding
+
+After centering & scaling the normalized spliced mRNA counts matrix, we use the HVGs identified earlier to generate a 30-dimensional principal component analysis (PCA) embedding. 
+
+```{python}
+sc.pp.scale(ad_panc)
+sc.tl.pca(
+    ad_panc, 
+    n_comps=30, 
+    random_state=312, 
+    use_highly_variable=True
+)
+```
+
+Visualizing the PCA embedding shows us a rather simple trajectory from endocrine precursors to mature endocrine cells. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: PCA embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-pca_embed
+sc.pl.embedding(
+    ad_panc, 
+    basis='pca', 
+    color='clusters',
+    title='', 
+    frameon=True, 
+    size=20, 
+    alpha=0.75, 
+    show=False
+)
+plt.gca().set_xlabel('PC 1')
+plt.gca().set_ylabel('PC 2')
+plt.tight_layout()
+plt.show()
+```
+
+### Graph-based Clustering
+
+After identifying the 20 nearest neighbors (NNs) for each cell in PCA space, we use the Leiden algorithm to partition the NN graph into discrete clusters. 
+
+```{python}
+#| results: hide
+sc.pp.neighbors(
+    ad_panc, 
+    use_rep='X_pca', 
+    n_pcs=30, 
+    n_neighbors=20, 
+    metric='cosine', 
+    random_state=312
+)
+sc.tl.leiden(
+    ad_panc, 
+    resolution=0.3, 
+    random_state=312
+)
+```
+
+The clusters generally correspond to our celltypes, with some minor differences e.g., overclustering in the ductal cell population (most likely due to cell cycle variation). 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Leiden clusters in PCA space
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-pca_leiden
+sc.pl.embedding(
+    ad_panc, 
+    basis='pca', 
+    color='leiden',
+    title='', 
+    frameon=True, 
+    size=20, 
+    alpha=0.75, 
+    show=False
+)
+plt.gca().set_xlabel('PC 1')
+plt.gca().set_ylabel('PC 2')
+plt.tight_layout()
+plt.show()
+```
+
+Plotting the cell cycle scores on the PCA embedding shows us that the two ductal cell clusters are in fact split by enrichment for cell cycle genes. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Cell cycle scores
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-pca_cc_scores
+scv.pl.scatter(
+  ad_panc, 
+  basis='pca', 
+  color_gradients=['S_score', 'G2M_score'], 
+  smooth=True,
+  perc=[5, 95], 
+  frameon=True, 
+  show=False
+)
+plt.gca().set_xlabel('PC 1')
+plt.gca().set_ylabel('PC 2')
+plt.tight_layout()
+plt.show()
+```
+
+### UMAP Embedding 
+
+We generate a UMAP embedding in two dimensions. 
+
+```{python}
+sc.tl.umap(ad_panc, random_state=312)
+```
+
+Upon visual inspection, the UMAP embedding appears to preserve both the transitions between celltypes and the heterogeneity of the mature endocrine cells better than the PCA embedding. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: UMAP embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_embed
+sc.pl.embedding(
+    ad_panc, 
+    basis='umap', 
+    color='clusters',
+    title='', 
+    frameon=True, 
+    size=20, 
+    alpha=0.75, 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+### Diffusion Map Embedding
+
+We'll also generate a 2D diffusion map embedding, since that algorithm often works well for trajectory manifolds. 
+
+```{python}
+sc.tl.diffmap(
+  ad_panc, 
+  n_comps=10, 
+  random_state=312
+)
+```
+
+We visualize the 2nd and 3rd components - for some reason there's a bug in the `scanpy` source code that incorrectly arranges the returned array for the embedding. While the overall trajectory structure is preserved, the local structure of the mature endocrine celltypes is messy, making this embedding less than ideal for our purposes.
+
+```{python}
+#| code-fold: true
+#| fig-cap: Diffusion map embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-diffmap_embed
+sc.pl.embedding(
+    ad_panc, 
+    basis='diffmap', 
+    color='clusters',
+    title='', 
+    frameon=True, 
+    size=20, 
+    alpha=0.75, 
+    show=False, 
+    components='2, 3'
+)
+plt.gca().set_xlabel('DC 1')
+plt.gca().set_ylabel('DC 2')
+plt.tight_layout()
+plt.show()
+```
+
+Despite the imperfection of the diffusion map embedding, we'll also estimate a diffusion pseudotime value for each cell, as the estimates might be useful later on. We set the root cell to be the ductal cell closest to the minimum of the second diffusion component (as visualized above).
+
+```{python}
+ad_panc.uns['iroot'] = np.argmin(ad_panc.obsm['X_diffmap'][:2])
+sc.tl.dpt(ad_panc, n_dcs=10)
+```
+
+Visualizing the diffusion pseudotime on our UMAP embedding shows that it seems to recapitulate the underlying biological process fairly well, with ductal cells assigned lower values and endocrine cells assigned higher values.
+
+```{python}
+#| code-fold: true
+#| fig-cap: Estimated diffusion pseudotime
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_dpt_pt
+sc.pl.embedding(
+    ad_panc, 
+    basis='umap', 
+    color='dpt_pseudotime',
+    title='', 
+    frameon=True, 
+    size=20, 
+    alpha=0.75, 
+    show=False, 
+    cmap='plasma'
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+### Force-directed Graph Embedding
+
+It's often worth checking a force-directed graph embedding in addition to the UMAP embedding, as it can sometimes better preserve trajectory structure in the data. 
+
+```{python}
+sc.tl.draw_graph(
+    ad_panc, 
+    layout='kk',
+    random_state=312,
+    root=np.argmin(ad_panc.obsm['X_diffmap'][:2]), 
+    n_jobs=4
+)
+```
+
+While the overall trajectory structure is better (visually speaking) than the PCA embedding, variation in the ductal & endocrine progenitor celltypes is hidden. We'll stick with the UMAP embedding going forwards. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Force-directed graph embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-graph_embed
+sc.pl.draw_graph(
+    ad_panc, 
+    color='clusters', 
+    title='', 
+    alpha=0.75, 
+    size=20, 
+    show=False
+)
+plt.gca().set_xlabel('Dim 1')
+plt.gca().set_ylabel('Dim 2')
+plt.tight_layout()
+plt.show()
+```
+
+## RNA Velocity Estimation
+
+Next, we'll estimate RNA velocity vectors for each cell via `scvelo`. Details on the methodology can be found in [the original paper](https://doi.org/10.1038/s41587-020-0591-3), and a review of current challenges & limitations of velocity analyses can be read [here](https://doi.org/10.15252/msb.202110282). 
+
+### SNN-based Imputation
+
+We start by smoothing the spliced & unspliced counts across the NNs we identified earlier. This helps to preserve signal in otherwise very noisy velocity vectors. 
+
+```{python}
+scv.pp.moments(
+    ad_panc, 
+    n_pcs=None, 
+    n_neighbors=20, 
+    use_rep='X_pca'
+)
+```
+
+### Dynamical Velocity Computation
+
+Next, we utilize the dynamical model to estimate velocity vectors, generate a velocity graph, and compute the uncertainty of each cells' differentiation direction. Lastly, we project the velocity vectors onto our 2D UMAP embedding for visualization purposes. 
+
+```{python}
+#| results: hold
+scv.tl.recover_dynamics(ad_panc, n_jobs=6)
+scv.tl.velocity(
+    ad_panc, 
+    mode='dynamical', 
+    use_highly_variable=True
+)
+scv.tl.velocity_graph(
+    ad_panc, 
+    n_jobs=4, 
+    compute_uncertainties=True
+)
+scv.tl.velocity_confidence(ad_panc)
+scv.tl.velocity_embedding(ad_panc, basis='umap')
+```
+
+Visualizing the projected velocities with a streamline plot allows us to get a rough idea of which direction cells are differentiating towards in each local area. From the endocrine progenitors through pre-endocrine cells we see a smooth flow of differentiation, which is followed by branching trajectories towards each of the mature endocrine celltypes. The streamlines broadly correspond to known biology, which indicates that RNA velocity should provide decent biological insights about this dataset. We also see cycling in the ductal cells, which is expected as this dataset is [known to have strong cell-cycle effects in the ductal cell cluster](https://scvelo.readthedocs.io/en/stable/VelocityBasics/).
+
+```{python}
+#| code-fold: true
+#| fig-cap: Velocity embedding streamlines
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_velo_stream
+scv.pl.velocity_embedding_stream(
+    ad_panc, 
+    basis='umap', 
+    color='clusters',
+    alpha=0.75, 
+    size=20, 
+    frameon=True, 
+    linewidth=0.5, 
+    legend_loc='right',
+    arrow_size=0.8,
+    title='', 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+::: {.callout-note}
+Streamline embedding plots generally provide qualitative insight at best, & their interpretation can be very subjective. Take care when forming biological conclusions or further hypotheses based on them, and verify what you see in a quantitative manner. 
+:::
+
+Visualizing the length of the velocity vectors in each cell gives us an idea of how quickly differentiation is occurring, as velocity vector length is a proxy measurement for differentiation speed. We see high scores in the pre-endocrine cells, as well as in the beta cells. This could be due to the phenomenon of self-duplication that is observed in beta cells, wherein new beta cells are produced in that way instead of through precursor differentiation. More information on beta cell specification can be read in [Murtaugh (2007)](https://doi.org/10.1242/dev.02770). 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Velocity length
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_velo_length
+sc.pl.embedding(
+    ad_panc, 
+    basis='umap', 
+    color='velocity_length',
+    title='', 
+    frameon=True, 
+    size=20, 
+    alpha=0.75, 
+    show=False, 
+    legend_loc='right margin', 
+    cmap='coolwarm'
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+### Investigation of Velocity Genes
+
+We begin by identifying ranking the velocity genes, then pull the top 6 highest-likelihood genes for each celltype. 
+
+```{python}
+#| results: hide
+scv.tl.rank_dynamical_genes(ad_panc, groupby='clusters')
+top_dyn_genes = scv.get_df(ad_panc, 'rank_dynamical_genes/names').head(6)
+```
+
+Plotting the spliced vs. unspliced mRNA estimates along with the learned dynamics per-gene allows us to determine which genes have dynamics specific to mature endocrine celltypes. For example, [*Pak3*](https://www.ncbi.nlm.nih.gov/gene/18481) is present in the top 6 genes of every endocrine celltype. Interestingly, this gene is mostly known to be associated in humans with intellectual development disorders, though it's also present in GO biological processes [such as differentiation and system development](https://www.informatics.jax.org/marker/MGI:1339656). Lastly, according to [Piccand *et al* (2013)](https://doi.org/10.2337/db13-0384), *Pak3* is linked to beta cell specification and has implications for diabetes risk, but their study does not conclude that it is necessary for the development of other endocrine celltypes.
+
+Another interesting tidbit is the presence of [*Meis2*](https://www.ncbi.nlm.nih.gov/gene?Cmd=DetailsSearch&Term=17536) as a top gene for both delta & epsilon cells. This gene is associated with organogenesis and autism, and is known to be a vital part of neural crest development as per [Machon *et al* (2015)](https://doi.org/10.1186%2Fs12861-015-0093-6). It's role in some endocrine celltypes' development but not others could indicate that the specification of delta & epsilon cells is more similar than that of alpha and beta cells. 
+
+#### Alpha Cells
+
+```{python}
+#| code-fold: true
+#| fig-cap: Alpha cell velocity genes
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-alpha_genes
+scv.pl.scatter(
+  ad_panc, 
+  top_dyn_genes['Alpha'], 
+  ncols=3, 
+  frameon=False, 
+  alpha=0.75, 
+  size=20, 
+  show=False
+)
+plt.gcf().supxlabel('Spliced mRNA')
+plt.gcf().supylabel('Unspliced mRNA')
+plt.show()
+```
+
+#### Beta Cells
+
+```{python}
+#| code-fold: true
+#| fig-cap: Beta cell velocity genes
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-beta_genes
+scv.pl.scatter(
+  ad_panc, 
+  top_dyn_genes['Beta'], 
+  ncols=3, 
+  frameon=False, 
+  alpha=0.75, 
+  size=20, 
+  show=False
+)
+plt.gcf().supxlabel('Spliced mRNA')
+plt.gcf().supylabel('Unspliced mRNA')
+plt.show()
+```
+
+#### Delta Cells
+
+```{python}
+#| code-fold: true
+#| fig-cap: Delta cell velocity genes
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-delta_genes
+scv.pl.scatter(
+  ad_panc, 
+  top_dyn_genes['Delta'], 
+  ncols=3, 
+  frameon=False, 
+  alpha=0.75, 
+  size=20, 
+  show=False
+)
+plt.gcf().supxlabel('Spliced mRNA')
+plt.gcf().supylabel('Unspliced mRNA')
+plt.show()
+```
+
+#### Epsilon Cells
+
+```{python}
+#| code-fold: true
+#| fig-cap: Epsilon cell velocity genes
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-epsilon_genes
+scv.pl.scatter(
+  ad_panc, 
+  top_dyn_genes['Epsilon'], 
+  ncols=3, 
+  frameon=False, 
+  alpha=0.75, 
+  size=20, 
+  show=False
+)
+plt.gcf().supxlabel('Spliced mRNA')
+plt.gcf().supylabel('Unspliced mRNA')
+plt.show()
+```
+
+## Cell Fate Identification
+
+In this part of the analysis we'll focus on identifying a set of terminal and initial cell states, along with the probabilities of transitions between them. This is performed via `CellRank`; the details of the method can be read in [the original paper](https://doi.org/10.1038/s41592-021-01346-6) as well as [the preprint for the second version](https://doi.org/10.1101/2023.07.19.549685). 
+
+### Velocity Kernel
+
+We start by computing a cell-cell transition probability matrix based on our RNA velocity estimates from earlier. Using the `model='monte_carlo'` option allows us to propagate the velocity vector uncertainty estimates forward to the estimated transition probability matrix. 
+
+```{python}
+#| results: hide
+vk = cr.kernels.VelocityKernel(ad_panc)
+vk.compute_transition_matrix(
+    model='monte_carlo', 
+    similarity='cosine', 
+    seed=312, 
+    n_jobs=4
+)
+```
+
+Visualizing the directed transitions on our UMAP embedding shows essentially the same patterns as our velocity vector projections from above, as expected. A drawback of using velocity on this dataset is that the inferred directionality in the ductal cell population is uncertain, so we'll need another source of information to strengthen our inferred trajectory. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Velocity kernel projection
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-vkernel_stream
+vk.plot_projection(
+    basis='umap', 
+    recompute=True, 
+    linewidth=0.5, 
+    arrow_size=0.8,
+    color='clusters', 
+    size=20, 
+    alpha=0.75, 
+    legend_loc='right margin', 
+    title='', 
+    frameon=True, 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+Visualizing the velocity confidence for each cell confirms our intuition that the ductal cells aren't fully interpretable using velocity-based information, as scores are slightly lower for the ductal cells than for e.g., the endocrine precursors or mature endocrine cells.  
+
+```{python}
+#| code-fold: true
+#| fig-cap: UMAP colored by velocity coherence 
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-velo_conf
+sc.pl.embedding(
+    ad_panc, 
+    basis='umap', 
+    color='velocity_confidence',
+    title='', 
+    frameon=True, 
+    size=20, 
+    alpha=0.75, 
+    show=False, 
+    legend_loc='right margin', 
+    cmap='coolwarm'
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+Plotting the coherence of the velocity estimates per-celltype shows us that the alpha cells also have a relatively low velocity confidence. This could be because they're located at the end of the trajectory / they're terminally differentiated, or it could mean that the cells are of lower quality than those in other clusters. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Velocity coherence by celltype
+#| fig-width: 6
+#| fig-height: 8
+#| label: fig-velo_conf_violins
+sc.pl.violin(
+  ad_panc, 
+  keys='velocity_confidence', 
+  groupby='clusters', 
+  rotation=30, 
+  xlabel='', 
+  ylabel='Velocity Confidence',
+  show=False
+)
+plt.tight_layout()
+plt.show()
+```
+
+### CytoTRACE Kernel
+
+In addition to the velocity kernel we'll compute another transition probability matrix based on CytoTRACE scores. The CytoTRACE method essentially uses the number of expressed genes as a proxy for differentiation potential. The details of the method can be found in [Gulati *et al* (2020)](https://doi.org/10.1126/science.aax0249). 
+
+```{python}
+#| results: hide
+ctk = cr.kernels.CytoTRACEKernel(ad_panc).compute_cytotrace()
+ctk.compute_transition_matrix(
+    threshold_scheme='soft',
+    nu=0.5, 
+    n_jobs=2
+)
+```
+
+Visualizing the CytoTRACE score shows what we would expect - ductal cells, which function as the initial cell state in this dataset, express more genes and have a higher differentiation potential than the intermediate and terminal cell states. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: CytoTRACE differentiation scores
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-cyto_score
+sc.pl.embedding(
+    ad_panc, 
+    basis='umap', 
+    color='ct_score',
+    title='', 
+    frameon=True, 
+    size=20, 
+    alpha=0.75, 
+    show=False, 
+    legend_loc='right margin'
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+The embedding projection based on our CytoTRACE kernel displays a confident differentiation trajectory for the initial and intermediate cell states, but for the mature cell states with fewer expressed genes the differentiation directions are much less certain.  
+
+```{python}
+#| code-fold: true
+#| fig-cap: CytoTRACE kernel projection
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-ctkernel_stream
+ctk.plot_projection(
+    basis='umap', 
+    recompute=True, 
+    linewidth=0.5, 
+    color='clusters', 
+    size=20, 
+    alpha=0.75, 
+    arrow_size=0.8, 
+    legend_loc='right margin', 
+    title='', 
+    frameon=True, 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+### Pseudotime Kernel
+
+Lastly, we can create another kernel based on our estimated diffusion pseudotime from earlier. This should help to smooth out the overall trajectory, since it represents the transitions between celltypes well. 
+
+```{python}
+#| results: hide
+pk = cr.kernels.PseudotimeKernel(ad_panc, time_key='dpt_pseudotime')
+pk.compute_transition_matrix(threshold_scheme='soft', n_jobs=2)
+```
+
+We visualize the directed transition matrix on our UMAP embedding, and see that the pseudotime kernel does a bit better of a job than the CytoTRACE kernel at identifying directionality in the mature endocrine cells. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Pseudotime kernel projection
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-ptkernel_stream
+pk.plot_projection(
+    basis='umap', 
+    recompute=True, 
+    linewidth=0.5, 
+    color='clusters', 
+    size=20, 
+    alpha=0.75, 
+    arrow_size=0.8, 
+    legend_loc='right margin', 
+    title='', 
+    frameon=True, 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+### Combined Kernel
+
+As we just saw, individual sources of information about our data can miss critical aspects, like CytoTRACE not detecting much differentiation during the latter half of the trajectory. One of the best features of `CellRank` is the ability to combine sources of information by combining the kernels themselves. Here we combine the velocity, CytoTRACE, & pseudotime kernels using an equal weighting scheme. This results in a new transition probability matrix, which we can then project onto our embedding. 
+
+```{python}
+#| results: hide
+ck = 0.33 * vk + 0.33 * ctk + 0.33 * pk
+```
+
+With all three source of information (velocity, differentiation potential, & pseudotime) combined, we finally have a relatively smooth trajectory that more or less lines up with known biology. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Combined kernel projection
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-combkernel_stream
+ck.plot_projection(
+    basis='umap', 
+    recompute=True, 
+    linewidth=0.5, 
+    arrow_size=0.8, 
+    color='clusters', 
+    size=20, 
+    alpha=0.75, 
+    legend_loc='right margin', 
+    title='', 
+    frameon=True, 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+### Macrostate Estimation
+
+#### Terminal States
+
+After computing a Schur decomposition of the transition probability matrix, we make the assumption that each component corresponds to a cell macrostate - a somewhat vague concept that can loosely be interpreted as a cell phenotype.  
+
+```{python}
+#| results: hide
+g = cr.estimators.GPCCA(ck)
+g.compute_schur(n_components=15, method='brandts')
+g.compute_macrostates(
+    cluster_key='clusters', 
+    n_cells=20, 
+    n_states=13, 
+    method='brandts'
+)
+```
+
+On our UMAP embedding we plot the 20 cells most likely to be assigned to each macrostate. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Macrostates identified via Schur decomposition
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_macrostates
+g.plot_macrostates(
+    which='all', 
+    discrete=True, 
+    same_plot=True, 
+    legend_loc='right margin', 
+    title='', 
+    basis='umap',
+    frameon=True,
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+Based on the macrostate estimates & known biology, we designate the four mature endocrine celltypes as terminal states. This step can be performed automatically using a heuristic 
+
+```{python}
+#| results: hide
+g.set_terminal_states(
+    states=['Alpha', 'Beta', 'Delta', 'Epsilon'], 
+    n_cells=20, 
+    cluster_key='clusters'
+)
+```
+
+```{python}
+#| code-fold: true
+#| fig-cap: Terminal cell fates
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-terminal_states
+g.plot_macrostates(
+    which='terminal', 
+    discrete=False, 
+    same_plot=True, 
+    legend_loc='right margin', 
+    title='', 
+    frameon=True,
+    basis='umap',
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+#### Initial States
+
+Based on our prior knowledge that the ductal cells are the root state, we set the initial state to be the ductal cell macrostate closest to the beginning of the trajectory.
+
+```{python}
+#| results: hide
+g.set_initial_states(
+    states=['Ductal_5'], 
+    n_cells=20, 
+    cluster_key='clusters'
+)
+```
+
+```{python}
+#| code-fold: true
+#| fig-cap: Initial cell state
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-initial_state
+g.plot_macrostates(
+    which='initial', 
+    discrete=True,
+    legend_loc='right margin', 
+    title='', 
+    frameon=True,
+    basis='umap', 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+### Absorption Probability Estimation
+
+Now that we have our terminal cell fates identified, we compute the probability of and time to absorption in each state. 
+
+```{python}
+#| results: hide
+g.compute_absorption_times(n_jobs=4)
+```
+
+We visualize the transition probabilities and initial & stationary distributions for each coarse macrostate. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Coarse transition probability matrix
+#| fig-width: 10
+#| fig-height: 10
+#| label: fig-transmat
+g.plot_coarse_T(
+    title='', 
+    show_initial_dist=True, 
+    show_stationary_dist=True
+)
+plt.tight_layout()
+plt.show()
+```
+
+The next step is to estimate the absorption probability of each terminal state; these probabilities are denoted fate probabilities by `CellRank`. 
+
+```{python}
+#| results: hide
+g.compute_fate_probabilities()
+```
+
+As expected, fate probabilities are highest near each terminal state. Beta cells seem to have the highest fate probability among endocrine progenitors, but this is most likely due to the higher frequency of beta cells in the dataset along with their position at the "end" of the trajectory on the embedding. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Cell fate probabilities
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_cellfates
+g.plot_fate_probabilities(
+    same_plot=True, 
+    title='', 
+    legend_loc='right margin', 
+    frameon=True, 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+### Lineage Driver Identification
+
+We compute lineage drivers for each cell fate by estimating the correlation between spliced mRNA and fate probability, after which we estimate lineage priming. Lineage priming is the degree to which a cell is "committed" towards its cell fate; details of how this is calculated can be read in [Velten *et al* (2017)](https://doi.org/10.1038/ncb3493). 
+
+```{python}
+#| results: hide
+lineage_drivers = g.compute_lineage_drivers(
+    seed=312, 
+    cluster_key='clusters', 
+    confidence_level=0.95, 
+    method='fisher'
+)
+lineage_priming = g.compute_lineage_priming()
+```
+
+Visualizing lineage priming on our UMAP embedding shows that fate commitment is strongest in the mature endocrine cells, with values being particularly high among epsilon cells. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Lineage priming
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_priming
+sc.pl.embedding(
+    ad_panc, 
+    basis='umap', 
+    color='priming_degree_fwd', 
+    title='', 
+    frameon=True, 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+### Latent Time Estimation
+
+By using the initial & terminal cell state probabilities as priors, we obtain a more accurate estimate of per-cell latent time. 
+
+```{python}
+#| results: hide
+scv.tl.latent_time(
+    ad_panc, 
+    end_key='term_states_fwd_probs', 
+    root_key='init_states_fwd_probs'
+)
+```
+
+The estimated latent time seems to characterize our trajectory well, which is good news for later analysis of trajectory differential expression (TDE). Overall, the beta cells seem to take the longest to reach terminal differentiation. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Gene-shared latent time
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_latenttime
+sc.pl.embedding(
+    ad_panc, 
+    basis='umap', 
+    color='latent_time', 
+    title='', 
+    frameon=True,
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+### Directed Graph Abstraction
+
+Using the initial & terminal cell state probabilities and gene-shared latent time as priors, we estimated a directed partitioned graph abstraction (PAGA), which shows us the general direction each celltype differentiates towards. 
+
+```{python}
+#| results: hide
+scv.tl.paga(
+    ad_panc, 
+    groups='clusters', 
+    end_key='term_states_fwd_probs', 
+    root_key='init_states_fwd_probs', 
+    use_time_prior='latent_time'
+)
+```
+
+Visualizing the PAGA on our UMAP embedding shows a transition from ductal cells to endocrine progenitors, from pre-endocrine cells to the mature endocrine celltypes. The one bit that doesn't agree with known biology is the transition from alpha to epsilon cells, as epsilon cells should be generated from pre-endocrine cells instead. This situation demonstrates the importance of having at least some *a priori* biological knowledge with which your analysis can be guided, since even with sophisticated methods scRNA-seq studies are still very difficult to get right. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Directed PAGA
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-paga_path
+scv.pl.paga(
+    ad_panc, 
+    color='clusters',
+    basis='umap', 
+    size=20, 
+    alpha=.25,
+    min_edge_width=2, 
+    frameon=True, 
+    title='', 
+    node_size_scale=0.75, 
+    arrowsize=8,
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.tight_layout()
+plt.show()
+```
+
+# Conclusions
+
+This dataset is relatively simple as far as trajectory structures go - there's only one subject, one timepoint, one developmental lineage. In reality, scRNA-seq experiments are often much more complex design-wise. Those situations are where the ability of `CellRank` to easily combine multiple sources of information really shines. We didn't use it here since the cells were all from a single timepoint, but the [`RealTimeKernel`](https://cellrank.readthedocs.io/en/latest/notebooks/tutorials/kernels/500_real_time.html) allows you to incorporate experimental time in addition to the other modalities we used here; this functionality is a great way to make sure your trajectory structure is capturing the cellular developmental process being studied and not just the progression of time. Overall, I think `CellRank` is a pretty well-designed method, and it's been very helpful to me on several scRNA-seq projects this year since the v2 release. 
+
+# Session Info
+
+```{r}
+sessioninfo::session_info()
+```

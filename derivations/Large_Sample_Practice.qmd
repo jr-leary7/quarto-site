@@ -74,7 +74,11 @@ $$
 \mathbb{E} \left[ S^2_n \right] = \frac{n-1}{n} \sigma^2
 $$
 
-However, we can show that it converges to $\sigma^2$ in probability. **Note**: going forwards, raw moments will be denoted $m_k$, and central moments $\mu_k$. 
+However, we can show that it converges to $\sigma^2$ in probability. 
+
+::: {.callout-note}
+Going forwards, raw moments will be denoted $m_k$, and central moments $\mu_k$. 
+:::
 
 $$
 \begin{aligned}

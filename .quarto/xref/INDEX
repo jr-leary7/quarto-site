@@ -31,5 +31,11 @@
   },
   "tutorials/Seurat_AnnData_Conversion.qmd": {
     "Seurat_AnnData_Conversion.html": "29413caf"
+  },
+  "tutorials/untitled.qmd": {
+    "untitled.html": "f1c1c648"
+  },
+  "tutorials/CellRank_Tutorial.qmd": {
+    "CellRank_Tutorial.html": "1406be50"
   }
 }

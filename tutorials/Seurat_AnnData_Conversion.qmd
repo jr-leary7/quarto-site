@@ -251,7 +251,9 @@ p3 <- DimPlot(brain,
 
 Having done all this preprocessing already, when using tools in Python we'd ideally like to be able to keep our clustering, annotations, embeddings, etc. as they are instead of recomputing them with `scanpy`. That isn't a terrible worst option of course, but it's pretty much impossible to get the results of stochastic algorithms such as Leiden clustering and UMAP, and even simpler ones like HVG identification to agree when using differing implementations of differing methods. With that in mind, let's port our results to Python! 
 
-**Note**: there's essentially two ways to do this; the first relies on the usage of RMarkdown & `reticulate`, which allows you to pass objects back & forth between languages. The second, more general method is to write the data to common file formats from R, then read them in with Python & clean up the files afterwards. We'll show examples of both options, but the best general-practice method is the file-based way. We'll set up a temporary directory for the conversion files now, then remove it after we're done. 
+::: {.callout-note}
+There's essentially two ways to do this; the first relies on the usage of RMarkdown & `reticulate`, which allows you to pass objects back & forth between languages. The second, more general method is to write the data to common file formats from R, then read them in with Python & clean up the files afterwards. We'll show examples of both options, but the best general-practice method is the file-based way. We'll set up a temporary directory for the conversion files now, then remove it after we're done. 
+:::
 
 ```{r}
 if (!dir.exists("./conversion_files/")) {
