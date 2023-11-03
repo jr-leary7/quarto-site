@@ -28,6 +28,7 @@ website:
       - text: "Tutorials"
         menu: 
           - tutorials/scLANE_Trajectory_DE.qmd
+          - tutorials/CellRank_Tutorial.qmd
           - tutorials/SCISSORS_Reclustering.qmd
           - tutorials/GEE_Benchmarking.qmd
           - tutorials/Seurat_AnnData_Conversion.qmd

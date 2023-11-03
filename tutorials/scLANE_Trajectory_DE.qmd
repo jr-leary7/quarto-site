@@ -101,7 +101,11 @@ adata
 
 ## Conversion from Python
 
-The `reticulate` package allows us to pass the counts matrices & metadata from Python back to R. We'll use the spliced mRNA counts as our default assay, and also define a new assay containing the total (spliced + unspliced) mRNA in each cell. Lastly, we remove genes with non-zero spliced mRNA in 3 or fewer cells. **Note**: while downloading this dataset requires a Python installation as well as the installation of the `scVelo` Python library (and its dependencies), running `scLANE` is done purely in R & requires no Python whatsoever. 
+The `reticulate` package allows us to pass the counts matrices & metadata from Python back to R. We'll use the spliced mRNA counts as our default assay, and also define a new assay containing the total (spliced + unspliced) mRNA in each cell. Lastly, we remove genes with non-zero spliced mRNA in 3 or fewer cells. 
+
+::: {.callout-note}
+While downloading this dataset requires a Python installation as well as the installation of the `scVelo` Python library (and its dependencies), running `scLANE` is done purely in R & requires no Python whatsoever. 
+:::
 
 ```{r}
 spliced_counts <- Matrix::Matrix(t(as.matrix(py$adata$layers["spliced"])), sparse = TRUE)
@@ -273,7 +277,11 @@ p4
 
 ## Trajectory Differential Expression
 
-Next, we prepare the primary inputs to `scLANE`: our `Seurat` object with the spliced counts set as the default assay, a dataframe containing our estimated pseudotime ordering, a vector of size factors to use as an offset in each model, and a set of genes whose dynamics we want to model. `scLANE` parallelizes over genes in order to speed up the computation at the expense of using a little more memory. The models are fit using NB GLMs with optimal spline knots identified empirically, and differential expression is quantified using a likelihood ratio test of the fitted model vs. a constant (intercept-only) model. In practice, genes designated as HVGs are usually the best candidates for modeling, so we choose the top 3,000 HVGs as our input. **Note**: the testing of the HVG set on its own is also justified by the reality that almost all trajectories are inferred using some sort of dimension-reduced space, and those embeddings are nearly universally generated using a set of HVGs. As such, genes not included in the HVG set actually have no direct relationship with the estimated trajectory, & it's generally safe to exclude them from trajectory analyses. 
+Next, we prepare the primary inputs to `scLANE`: our `Seurat` object with the spliced counts set as the default assay, a dataframe containing our estimated pseudotime ordering, a vector of size factors to use as an offset in each model, and a set of genes whose dynamics we want to model. `scLANE` parallelizes over genes in order to speed up the computation at the expense of using a little more memory. The models are fit using NB GLMs with optimal spline knots identified empirically, and differential expression is quantified using a likelihood ratio test of the fitted model vs. a constant (intercept-only) model. In practice, genes designated as HVGs are usually the best candidates for modeling, so we choose the top 3,000 HVGs as our input. 
+
+::: {.callout-note}
+The testing of the HVG set on its own is also justified by the reality that almost all trajectories are inferred using some sort of dimension-reduced space, and those embeddings are nearly universally generated using a set of HVGs. As such, genes not included in the HVG set actually have no direct relationship with the estimated trajectory, & it's generally safe to exclude them from trajectory analyses. 
+:::
 
 ```{r, results='hold'}
 top3k_hvg <- HVFInfo(seu) %>% 

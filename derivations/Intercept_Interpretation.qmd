@@ -429,7 +429,9 @@ coef(cat_mod)
 
 To summarize: when categorical variables are used in an ordinary linear regression, the intercept represents the mean of the response variable when each of the categorical variables is at its reference level. When running regressions like this, it's important to make sure that 1) you know what the reference levels are for each of your categorical variables and 2) that those reference levels make sense. Sometimes it doesn't matter what order the categorical variables are in, but it often does - so check! A final note is that this interpretation holds when *only* categorical variables are used in your model. When continuous variables are included too, the interpretation changes. More on that in a bit. 
 
-**Note**: Working with categorical variables (or factors, as R labels them) can be confusing. If you want to gain a deeper understanding of how factors work, check out [the chapter on them in the R for Data Science book](https://r4ds.had.co.nz/factors.html). For factor-related tools, try the [`forcats` R package](https://forcats.tidyverse.org/articles/forcats.html), which is part of the [`tidyverse`](https://www.tidyverse.org) ecosystem and makes dealing with factors a lot simpler. 
+::: {.callout-note}
+Working with categorical variables (or factors, as R labels them) can be confusing. If you want to gain a deeper understanding of how factors work, check out [the chapter on them in the R for Data Science book](https://r4ds.had.co.nz/factors.html). For factor-related tools, try the [`forcats` R package](https://forcats.tidyverse.org/articles/forcats.html), which is part of the [`tidyverse`](https://www.tidyverse.org) ecosystem and makes dealing with factors a lot simpler. 
+:::
 
 ## Models with Continuous Predictors 
 

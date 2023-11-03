@@ -106,7 +106,7 @@ pbmc <- NormalizeData(pbmc,
                      verbose = FALSE)
 ```
 
-Let's visualize the principal components. Notable genes in PC 1 include **MALAT1**, high abundance of which is [a common artifact of 10X-sequenced data](https://kb.10xgenomics.com/hc/en-us/articles/360004729092-Why-do-I-see-high-levels-of-Malat1-in-my-gene-expression-data-). PC 2 seems to separate NK cells (**NKG7**, **GZMB**) and myeloid cells (**HLA-DRA**, **CD79A**). PC 3 is composed of variation that could originate from platelets (**PPBP**). PCs 4-6 look like they separate several types of monocytic, T, NK, and dendritic cells. 
+Let's visualize the principal components. Notable genes in PC 1 include *MALAT1*, high abundance of which is [a common artifact of 10X-sequenced data](https://kb.10xgenomics.com/hc/en-us/articles/360004729092-Why-do-I-see-high-levels-of-Malat1-in-my-gene-expression-data-). PC 2 seems to separate NK cells (*NKG7*, *GZMB*) and myeloid cells (*HLA-DRA*, *CD79A*). PC 3 is composed of variation that could originate from platelets (*PPBP*). PCs 4-6 look like they separate several types of monocytic, T, NK, and dendritic cells. 
 
 ```{r}
 DimHeatmap(pbmc, 
@@ -128,7 +128,7 @@ DimPlot(pbmc, pt.size = 1) +
 
 ## Broad Annotations 
 
-First we identify CD8+ T-cells via **CD8A**, and CD4+ T-cells with **IL7R**. Lastly, **FCGR3A** (aka **CD16**) is specific to CD16+ monocytes. We can combine the plots using the excellent `patchwork` package. 
+First we identify CD8+ T-cells via *CD8A*, and CD4+ T-cells with *IL7R*. Lastly, *FCGR3A* (aka *CD16*) is specific to CD16+ monocytes. We can combine the plots using the excellent `patchwork` package. 
 
 ```{r, message=FALSE, warning=FALSE}
 p1 <- FeaturePlot(pbmc, features = "CD8A", pt.size = 1) + 
@@ -144,7 +144,7 @@ p2 <- FeaturePlot(pbmc, features = "IL7R", pt.size = 1) +
 p1 / p2
 ```
 
-Next, we use **HLA-DRA** to broadly identify monocytic cells, and **FCGR3A** (aka **CD16**) to single out the CD16+ monocytes.  
+Next, we use *HLA-DRA* to broadly identify monocytic cells, and *FCGR3A* (aka *CD16*) to single out the CD16+ monocytes.  
 
 ```{r, message=FALSE, warning=FALSE}
 p1 <- FeaturePlot(pbmc, features = "HLA-DRA", pt.size = 1) + 
@@ -160,7 +160,7 @@ p2 <- FeaturePlot(pbmc, features = "FCGR3A", pt.size = 1) +
 p1 / p2
 ```
 
-Lastly, abundance of **MS4A1** points out a cluster of B cells. 
+Lastly, abundance of *MS4A1* points out a cluster of B cells. 
 
 ```{r, message=FALSE, warning=FALSE}
 FeaturePlot(pbmc, features = "MS4A1", pt.size = 1) + 
@@ -252,7 +252,7 @@ DimPlot(mono_reclust) +
         plot.title = element_blank())
 ```
 
-Highly-specific abundance of **FCER1A** allows us to identify the dendritic cells in cluster 2. 
+Highly-specific abundance of *FCER1A* allows us to identify the dendritic cells in cluster 2. 
 
 ```{r, warning=FALSE, message=FALSE}
 data.frame(exp = mono_reclust@assays$RNA@data["FCER1A", ], 
@@ -269,7 +269,7 @@ data.frame(exp = mono_reclust@assays$RNA@data["FCER1A", ],
         axis.title.x = element_blank())
 ```
 
-Both cluster 0 & cluster 1 seem to be CD14+, and cluster 1 appears to have slightly higher (but still low) abundance of **FCGR3A**. 
+Both cluster 0 & cluster 1 seem to be CD14+, and cluster 1 appears to have slightly higher (but still low) abundance of *FCGR3A*. 
 
 ```{r, message=FALSE, warning=FALSE}
 p1 <- data.frame(exp = mono_reclust@assays$RNA@data["CD14", ], 
@@ -301,7 +301,7 @@ p2 <- data.frame(exp = mono_reclust@assays$RNA@data["FCGR3A", ],
 p1 / p2
 ```
 
-From [Kapellos *et al* (2019)](https://doi.org/10.3389/fimmu.2019.02035), we know that intermediate monocytes have high abundance of **CD14**, low but non-zero abundance of **CD16** (which again is denoted **FCGR3A** in this dataset), and can be identified through higher abundance of other markers like **HLA-DPB1** and **CD74** in comparison to CD14+ monocytes. With all this information, we'll conclude that cluster 0 is likely composed of CD14+ monocytes and cluster 1 of intermediate monocytes. 
+From [Kapellos *et al* (2019)](https://doi.org/10.3389/fimmu.2019.02035), we know that intermediate monocytes have high abundance of *CD14*, low but non-zero abundance of *CD16* (which again is denoted *FCGR3A* in this dataset), and can be identified through higher abundance of other markers like *HLA-DPB1* and *CD74* in comparison to CD14+ monocytes. With all this information, we'll conclude that cluster 0 is likely composed of CD14+ monocytes and cluster 1 of intermediate monocytes. 
 
 ```{r, message=FALSE, warning=FALSE}
 p1 <- data.frame(exp = mono_reclust@assays$RNA@data["HLA-DQB1", ], 
@@ -333,7 +333,7 @@ p2 <- data.frame(exp = mono_reclust@assays$RNA@data["CD74", ],
 p1 / p2
 ```
 
-Lastly, we can tell that cluster 3 is composed of platelets thanks to high abundance of **PPBP**. 
+Lastly, we can tell that cluster 3 is composed of platelets thanks to high abundance of *PPBP*. 
 
 ```{r, message=FALSE, warning=FALSE}
 data.frame(exp = mono_reclust@assays$RNA@data["PPBP", ], 
