@@ -19,6 +19,7 @@ website:
     creator: "@leary_jack"
     site: "@UF"
   open-graph: true
+  google-analytics: "G-H2832QJGSY"
   page-navigation: true
   navbar:
     search: true
