@@ -178,7 +178,7 @@ sc.pp.highly_variable_genes(
 We'll integrate across the ID specifying which fetus the cells came from. We also make `scVI` aware of our celltypes, and instruct it to regress out variation associated with the percentage of mitochondrial reads. 
 
 ```{python}
-#| results: hold
+#| results: hide
 scvi.settings.verbosity = 0
 scvi.settings.seed = 312
 scvi.settings.num_threads = 4
@@ -206,7 +206,8 @@ int_model = scvi.model.SCVI(
 
 Finally we train a variational autoencoder (VAE) over 250 epochs to embed the cells in 20-dimensional latent space.  
  
-```{python, results='hide'}
+```{python}
+#| results: hide
 int_model.train(
     early_stopping=True,
     accelerator='cpu', 

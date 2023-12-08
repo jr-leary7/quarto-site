@@ -58,6 +58,7 @@ warnings.simplefilter('ignore', category=UserWarning)
 # Theme for `matplotlib`
 
 ```{python}
+#| code-fold: true
 base_size = 12
 plt.rcParams.update({
     # font
@@ -68,6 +69,7 @@ plt.rcParams.update({
     'figure.edgecolor': 'white', 
     'figure.facecolor': 'white', 
     'figure.figsize': (6, 4), 
+    'figure.constrained_layout.use': True,
     # axes
     'axes.edgecolor': 'black',
     'axes.grid': False,
@@ -168,7 +170,6 @@ sc.pl.embedding(
 )
 plt.gca().set_xlabel('PC 1')
 plt.gca().set_ylabel('PC 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -213,7 +214,6 @@ sc.pl.embedding(
 )
 plt.gca().set_xlabel('PC 1')
 plt.gca().set_ylabel('PC 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -236,7 +236,6 @@ scv.pl.scatter(
 )
 plt.gca().set_xlabel('PC 1')
 plt.gca().set_ylabel('PC 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -268,7 +267,6 @@ sc.pl.embedding(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -305,7 +303,6 @@ sc.pl.embedding(
 )
 plt.gca().set_xlabel('DC 1')
 plt.gca().set_ylabel('DC 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -337,7 +334,6 @@ sc.pl.embedding(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -350,7 +346,6 @@ sc.tl.draw_graph(
     ad_panc, 
     layout='kk',
     random_state=312,
-    root=np.argmin(ad_panc.obsm['X_diffmap'][:2]), 
     n_jobs=4
 )
 ```
@@ -373,7 +368,6 @@ sc.pl.draw_graph(
 )
 plt.gca().set_xlabel('Dim 1')
 plt.gca().set_ylabel('Dim 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -438,7 +432,6 @@ scv.pl.velocity_embedding_stream(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -468,7 +461,6 @@ sc.pl.embedding(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -616,7 +608,6 @@ vk.plot_projection(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -642,7 +633,6 @@ sc.pl.embedding(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -663,7 +653,6 @@ sc.pl.violin(
   ylabel='Velocity Confidence',
   show=False
 )
-plt.tight_layout()
 plt.show()
 ```
 
@@ -702,7 +691,6 @@ sc.pl.embedding(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -729,7 +717,6 @@ ctk.plot_projection(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -766,7 +753,6 @@ pk.plot_projection(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -802,7 +788,6 @@ ck.plot_projection(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -844,7 +829,6 @@ g.plot_macrostates(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -877,7 +861,6 @@ g.plot_macrostates(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -911,7 +894,6 @@ g.plot_macrostates(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -921,7 +903,7 @@ Now that we have our terminal cell fates identified, we compute the probability 
 
 ```{python}
 #| results: hide
-g.compute_absorption_times(n_jobs=4)
+g.compute_absorption_times(n_jobs=2)
 ```
 
 We visualize the transition probabilities and initial & stationary distributions for each coarse macrostate. 
@@ -937,7 +919,6 @@ g.plot_coarse_T(
     show_initial_dist=True, 
     show_stationary_dist=True
 )
-plt.tight_layout()
 plt.show()
 ```
 
@@ -965,7 +946,6 @@ g.plot_fate_probabilities(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -1002,7 +982,6 @@ sc.pl.embedding(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -1037,7 +1016,6 @@ sc.pl.embedding(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
@@ -1079,7 +1057,6 @@ scv.pl.paga(
 )
 plt.gca().set_xlabel('UMAP 1')
 plt.gca().set_ylabel('UMAP 2')
-plt.tight_layout()
 plt.show()
 ```
 
