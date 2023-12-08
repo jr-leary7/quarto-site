@@ -1,0 +1,790 @@
+---
+title: "Integrating scRNA-seq Datasets with Python"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  orcid: 0009-0004-8821-3269
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: today
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    embed-resources: true
+    fig-format: retina
+    df-print: kable
+    link-external-newwindow: true
+    fig-cap-location: bottom
+    fig-align: center
+execute: 
+  cache: false
+  freeze: auto
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, 
+                      comment = NA, 
+                      fig.retina = TRUE)
+reticulate::use_virtualenv("~/Desktop/PhD/Research/Python_Envs/personal_site/", required = TRUE)
+```
+
+# Introduction
+
+The need to integrate data from scRNA-seq samples into one harmonized dataset has increased in recent years as single cell sequencing has gotten cheaper, making it easier to collect data from multiple subjects, timepoints, or conditions. The goal of most integration techniques is to create an embedding that is (relatively) free of batch effects and that does not lead to the cells clustering by subject ID. There are many methods available to perform integration in both R & Python, and evaluating which method is "best" for your dataset can be tricky & subjective. In this tutorial we'll try out several of the integration methods available in the `scanpy` package and compare their results. We'll use a SmartSeq2 dataset containing myeloid cells from the developing human fetal liver that was originally analyzed in [Popescu *et al* (2020)](https://doi.org/10.1038/s41586-019-1652-y). As such, our goal will be to determine which integration method results in the best embedding for downstream trajectory analysis. In developmental biology settings, a "good" scRNA-seq integrated embedding is smoothly connected (i.e., no spaced-out, discrete clusters), and places celltypes in roughly the order expected based on known biology. 
+
+# Libraries
+
+## R
+
+```{r, message=FALSE}
+library(dplyr)       # dataframe tools
+library(Matrix)      # sparse matrices
+library(Seurat)      # scRNA-seq tools
+library(ggplot2)     # plots
+library(reticulate)  # Python interface
+```
+
+## Python
+
+```{python}
+import scvi                          # VAE integration
+import warnings                      # filter out warnings
+import numpy as np                   # matrix utilities
+import scanpy as sc                  # scRNA-seq processing
+import pandas as pd                  # dataframe tools
+import anndata as ad                 # scRNA-seq data structures
+import matplotlib.pyplot as plt      # plot utilities
+from scipy.sparse import csr_matrix  # sparse matrices
+```
+
+```{python}
+warnings.simplefilter('ignore', category=UserWarning)
+```
+
+# Theme for `matplotlib`
+
+Here we define a theme for `matplotlib` that mostly matches `ggplot2::theme_classic()`. 
+
+```{python}
+#| code-fold: true
+base_size = 12
+plt.rcParams.update({
+    # font
+    'font.size': base_size, 
+    'font.weight': 'normal',
+    # figure
+    'figure.dpi': 300, 
+    'figure.edgecolor': 'white', 
+    'figure.facecolor': 'white', 
+    'figure.figsize': (6, 4), 
+    'figure.constrained_layout.use': True,
+    # axes
+    'axes.edgecolor': 'black',
+    'axes.grid': False,
+    'axes.labelpad': 2.75,
+    'axes.labelsize': base_size * 0.8,
+    'axes.linewidth': 1.5,
+    'axes.spines.right': False,
+    'axes.spines.top': False,
+    'axes.titlelocation': 'left',
+    'axes.titlepad': 11,
+    'axes.titlesize': base_size,
+    'axes.titleweight': 'normal',
+    'axes.xmargin': 0.1, 
+    'axes.ymargin': 0.1, 
+    # legend
+    'legend.borderaxespad': 1,
+    'legend.borderpad': 0.5,
+    'legend.columnspacing': 2,
+    'legend.fontsize': base_size * 0.8,
+    'legend.frameon': False,
+    'legend.handleheight': 1,
+    'legend.handlelength': 1.2,
+    'legend.labelspacing': 1,
+    'legend.title_fontsize': base_size, 
+    'legend.markerscale': 1.25
+})
+```
+
+# Data 
+
+We'll start by reading in the SmartSeq2 scRNA-seq data from [Popescu *et al*](https://doi.org/10.1038/s41586-019-1652-y), which we downloaded from [the Human Developmental Cell Atlas portal](https://developmental.cellatlas.io/fetal-liver). Some massaging of the data is necessary to get it ready to pass into Python. 
+
+```{r}
+seu_blood <- readRDS("../../datasets/fetal_liver_SS2.RDS")
+class(seu_blood) <- "Seurat"
+blood_counts <- as.matrix(seu_blood@raw.data)
+blood_counts <- blood_counts[, colnames(seu_blood@scale.data)]
+cell_metadata <- seu_blood@meta.data[colnames(seu_blood@scale.data), ] %>% 
+                 mutate(cell = rownames(.), 
+                        .before = 1)
+gene_metadata <- data.frame(gene = rownames(blood_counts))
+```
+
+# Read data into Python
+
+Using the `reticulate` R package we transfer our raw counts matrix and cell & gene metadata into Python, then create an `AnnData` object. Lastly, we rename some cell metadata features and subset to just the macrophage development lineage. This will simplify our trajectory structure and make choosing a good integration / embedding combination easier. 
+
+```{python}
+blood_counts = csr_matrix(r.blood_counts.transpose())
+cell_metadata = r.cell_metadata
+gene_metadata = r.gene_metadata
+ad_blood = ad.AnnData(blood_counts)
+ad_blood.obs_names = cell_metadata['cell']
+ad_blood.var_names = gene_metadata['gene']
+ad_blood.obs = cell_metadata
+ad_blood.obs.rename(columns={'cell.labels': 'celltype', 'fetal.ids': 'fetal_ID', 'percent.mito': 'percent_MT', 'sort.ids': 'sort_ID'}, inplace=True)
+ad_blood = ad_blood[ad_blood.obs['celltype'].isin(['HSC_MPP', 'Neutrophil-myeloid progenitor', 'Monocyte precursor', 'Monocyte', 'Mono-Mac', 'Kupffer Cell'])]
+ad_blood.obs['celltype'] = (
+    ad_blood.obs['celltype']
+              .map(lambda x: {'HSC_MPP': 'HSC', 'Mono-Mac': 'Monocyte-macrophage', 'Kupffer Cell': 'Kupffer cell'}.get(x, x))
+              .astype('category')
+)
+ad_blood.var = gene_metadata
+ad_blood
+```
+
+# Preprocessing
+
+After removing cells classified as doublets by the original authors, we filter out low-depth cells and genes expressed in less than 10 cells. We then set up a new layer named **counts** containing the raw counts - this is necessary for integration with `scVI`, which takes as input the raw, unnormalized expression estimates. Lastly, we identify 3,000 HVGs and subset our object to just those genes. 
+
+```{python}
+ad_blood = ad_blood[ad_blood.obs['doublets'] == 'Singlet']
+sc.pp.filter_cells(ad_blood, min_counts=200)
+sc.pp.filter_genes(ad_blood, min_cells=10)
+ad_blood.layers['counts'] = ad_blood.X.copy() 
+ad_blood.raw = ad_blood
+sc.pp.highly_variable_genes(
+    ad_blood, 
+    n_top_genes=3000, 
+    flavor='seurat_v3', 
+    layer='counts',
+    subset=True
+)
+```
+
+# Integration with `scVI`
+
+[Paper](https://doi.org/10.1038/s41592-018-0229-2), [Docs](https://scvi-tools.org)
+
+## Train `scVI` model
+
+We'll integrate across the ID specifying which fetus the cells came from. We also make `scVI` aware of our celltypes, and instruct it to regress out variation associated with the percentage of mitochondrial reads. 
+
+```{python}
+#| results: hold
+scvi.settings.verbosity = 0
+scvi.settings.seed = 312
+scvi.settings.num_threads = 4
+scvi.model.SCVI.setup_anndata(
+    ad_blood, 
+    layer='counts', 
+    batch_key='fetal_ID', 
+    labels_key='celltype', 
+    continuous_covariate_keys=['percent_MT']
+)
+```
+
+We allow gene dispersion estimates to vary by celltype, and specify expression as following a negative-binomial distribution. 
+
+```{python}
+int_model = scvi.model.SCVI(
+    ad_blood, 
+    n_layers=3, 
+    n_hidden=96, 
+    n_latent=20, 
+    gene_likelihood='nb', 
+    dispersion='gene-label'
+)
+```
+
+Finally we train a variational autoencoder (VAE) over 250 epochs to embed the cells in 20-dimensional latent space.  
+ 
+```{python, results='hide'}
+int_model.train(
+    early_stopping=True,
+    accelerator='cpu', 
+    max_epochs=250, 
+    train_size=0.8
+)
+ad_blood.obsm['X_scVI'] = int_model.get_latent_representation()
+```
+
+```{python}
+#| code-fold: true
+#| fig-cap: scVI embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-scvi_embed
+sc.pl.embedding(
+    ad_blood, 
+    basis='scVI', 
+    color='celltype',
+    title='', 
+    frameon=True, 
+    size=30, 
+    alpha=0.75, 
+    show=False
+)
+plt.gca().set_xlabel('scVI 1')
+plt.gca().set_ylabel('scVI 2')
+plt.show()
+```
+
+## SNN graph estimation
+
+We use the cosine distance to identify 20 NNs for each cell in the latent `scVI` space. This neighbor graph will serve as the basis for our nonlinear embeddings. 
+
+```{python}
+sc.pp.neighbors(
+    ad_blood, 
+    n_neighbors=20,
+    n_pcs=None,  
+    metric='cosine', 
+    random_state=312, 
+    use_rep='X_scVI'
+)
+```
+
+## UMAP embedding
+
+Using default parameters, we fit a 2D UMAP embedding. 
+
+```{python}
+sc.tl.umap(ad_blood, random_state=312)
+```
+
+The UMAP embedding is a bit oddly-shaped, but celltypes are well-connected and their progression follows known biology i.e., HSCs form precursor populations which develop into mature monocytic cells. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: scVI-based UMAP embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_embed_scvi
+sc.pl.embedding(
+    ad_blood, 
+    basis='umap', 
+    color='celltype',
+    title='', 
+    frameon=True, 
+    size=30, 
+    alpha=0.75, 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.show()
+```
+
+## Force-directed graph embedding
+
+With the Fruchterman-Reingold algorithm we generate a force-directed graph embedding in 2 dimensions. In my experience this algorithm often works better than UMAP at preserving trajectory structures. 
+
+```{python}
+sc.tl.draw_graph(
+    ad_blood, 
+    layout='fr',  
+    random_state=312,
+    n_jobs=2
+)
+```
+
+Similar to the UMAP embedding, the FR embedding is well-connected and the celltypes are arranged correctly. I like this embedding better, but that's mostly based on aesthetics as well as some intuition about how pseudotime estimation would perform on each. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: scVI-based force-directed graph embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-graph_embed_scvi
+sc.pl.draw_graph(
+    ad_blood, 
+    color='celltype', 
+    title='', 
+    alpha=0.75, 
+    size=30, 
+    show=False
+)
+plt.gca().set_xlabel('FR 1')
+plt.gca().set_ylabel('FR 2')
+plt.show()
+```
+
+## Diffusion map embedding
+
+Lastly, we estimate a diffusion map embedding in 15 dimensions. This algorithm is specifically designed to preserve transitional structures, but in my experience it usually only works well on datasets with very simple trajectories. 
+
+```{python}
+sc.tl.diffmap(
+    ad_blood, 
+    random_state=312, 
+    n_comps=16
+)
+ad_blood.obsm['X_diffmap_old'] = ad_blood.obsm['X_diffmap']
+ad_blood.obsm['X_diffmap'] = ad_blood.obsm['X_diffmap'][:, 1:] 
+```
+
+Like the UMAP embedding the diffusion map embedding is pretty angular, but it recapitulates the biology well. Altogether, the `scVI` integration seems to have worked correctly as all embedding algorithms perform reasonably well. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: scVI-based diffusion map embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-diffmap_embed_scvi
+sc.pl.diffmap(
+    ad_blood, 
+    color='celltype', 
+    title='', 
+    alpha=0.75, 
+    size=30, 
+    show=False
+)
+plt.gca().set_xlabel('DC 1')
+plt.gca().set_ylabel('DC 2')
+plt.show()
+```
+
+# Integration with `Harmony`
+
+[Paper](https://doi.org/10.1038/s41592-019-0619-0), [Docs](https://github.com/slowkow/harmonypy)
+
+## Normalization
+
+The `Harmony` algorithm works by "correcting" a principal component embedding for batch effects. As such, we need to first normalize and variance-stabilize the data. 
+
+```{python}
+sc.pp.normalize_total(ad_blood, target_sum=1e4)
+sc.pp.log1p(ad_blood)
+```
+
+## PCA embedding
+
+Next we scale the normalized counts and run PCA. 
+
+```{python}
+sc.pp.scale(ad_blood)
+sc.tl.pca(
+    ad_blood, 
+    n_comps=30, 
+    random_state=312, 
+    use_highly_variable=True
+)
+```
+
+The PCA embedding on its own is alright, and I don't imagine the integration procedure will change it much. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: PCA embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-pca_embed
+sc.pl.embedding(
+    ad_blood, 
+    basis='pca', 
+    color='celltype', 
+    title='', 
+    frameon=True, 
+    size=30, 
+    alpha=0.75, 
+    show=False
+)
+plt.gca().set_xlabel('PC 1')
+plt.gca().set_ylabel('PC 2')
+plt.show()
+```
+
+## PCA correction with `Harmony`
+
+```{python}
+sc.external.pp.harmony_integrate(ad_blood, key='fetal_ID')
+```
+
+As expected, the corrected PCA space is pretty similar to the original one. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Harmony embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-harmony_embed
+sc.pl.embedding(
+    ad_blood, 
+    basis='pca_harmony', 
+    color='celltype', 
+    title='', 
+    frameon=True, 
+    size=30, 
+    alpha=0.75, 
+    show=False
+)
+plt.gca().set_xlabel('Harmony 1')
+plt.gca().set_ylabel('Harmony 2')
+plt.show()
+```
+
+## SNN graph estimation
+
+We compute $k = 20$ NNs in the `Harmony` PCA space. 
+
+```{python}
+sc.pp.neighbors(
+    ad_blood, 
+    n_neighbors=20,
+    n_pcs=None,  
+    metric='cosine', 
+    random_state=312, 
+    use_rep='X_pca_harmony'
+)
+```
+
+## UMAP embedding
+
+```{python}
+sc.tl.umap(ad_blood, random_state=312)
+```
+
+Uh oh - the UMAP embedding displays disconnected clusters of cells. This indicates that the integration didn't perform very well, though other dimension reduction algorithms might perform better. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Harmony-based UMAP embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_embed_harmony
+sc.pl.embedding(
+    ad_blood, 
+    basis='umap', 
+    color='celltype',
+    title='', 
+    frameon=True, 
+    size=30, 
+    alpha=0.75, 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.show()
+```
+
+## Force-directed graph embedding
+
+```{python}
+sc.tl.draw_graph(
+    ad_blood, 
+    layout='fr',  
+    random_state=312,
+    n_jobs=2
+)
+```
+
+The FR embedding shows a disconnected cluster of monocytes as well. In addition, the progression from HSCs to progenitor / mature states is not well-represented. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Harmony-based force-directed graph embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-graph_embed_harmony
+sc.pl.draw_graph(
+    ad_blood, 
+    color='celltype', 
+    title='', 
+    alpha=0.75, 
+    size=30, 
+    show=False
+)
+plt.gca().set_xlabel('FR 1')
+plt.gca().set_ylabel('FR 2')
+plt.show()
+```
+
+## Diffusion map embedding
+
+```{python}
+sc.tl.diffmap(
+    ad_blood, 
+    random_state=312, 
+    n_comps=16
+)
+ad_blood.obsm['X_diffmap_old'] = ad_blood.obsm['X_diffmap']
+ad_blood.obsm['X_diffmap'] = ad_blood.obsm['X_diffmap'][:, 1:] 
+```
+
+The diffusion map embedding is also fairly disconnected and has a tiny outlier cluster. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Harmony-based diffusion map embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-diffmap_embed_harmony
+sc.pl.diffmap(
+    ad_blood, 
+    color='celltype', 
+    title='', 
+    alpha=0.75, 
+    size=30, 
+    show=False
+)
+plt.gca().set_xlabel('DC 1')
+plt.gca().set_ylabel('DC 2')
+plt.show()
+```
+
+# Integration with `BBKNN`
+
+[Paper](https://doi.org/10.1093/bioinformatics/btz625), [Docs](https://github.com/Teichlab/bbknn)
+
+## Batch-specific SNN estimation
+
+Next we try the `BBKNN` algorithm which, instead of producing an integrated embedding (as do the other methods) produces a batch-corrected neighborhood graph. We can then use that graph structure to generate UMAP and other embeddings. 
+
+```{python}
+sc.external.pp.bbknn(
+  ad_blood, 
+  batch_key='fetal_ID',
+  use_annoy=False,
+  metric='cosine',
+  pynndescent_random_state=312,
+  pynndescent_n_neighbors=20
+)
+```
+
+## UMAP embedding
+
+```{python}
+sc.tl.umap(ad_blood, random_state=312)
+```
+
+The UMAP is somewhat smoothly-connected, but the biological sequence of celltypes isn't correct. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: BBKNN-based UMAP embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_embed_bbknn
+sc.pl.embedding(
+    ad_blood, 
+    basis='umap', 
+    color='celltype',
+    title='', 
+    frameon=True, 
+    size=30, 
+    alpha=0.75, 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.show()
+```
+
+## Force-directed graph embedding
+
+```{python}
+sc.tl.draw_graph(
+    ad_blood, 
+    layout='fr',  
+    random_state=312,
+    n_jobs=2
+)
+```
+
+The FR embedding suffers from the same issue. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: BBKNN-based force-directed graph embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-graph_embed_bbknn
+sc.pl.draw_graph(
+    ad_blood, 
+    color='celltype', 
+    title='', 
+    alpha=0.75, 
+    size=30, 
+    show=False
+)
+plt.gca().set_xlabel('FR 1')
+plt.gca().set_ylabel('FR 2')
+plt.show()
+```
+
+## Diffusion map embedding
+
+```{python}
+sc.tl.diffmap(
+    ad_blood, 
+    random_state=312, 
+    n_comps=16
+)
+ad_blood.obsm['X_diffmap_old'] = ad_blood.obsm['X_diffmap']
+ad_blood.obsm['X_diffmap'] = ad_blood.obsm['X_diffmap'][:, 1:] 
+```
+
+The diffusion map embedding also misplaces the monocyte phenotype. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: BBKNN-based diffusion map embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-diffmap_embed_bbknn
+sc.pl.diffmap(
+    ad_blood, 
+    color='celltype', 
+    title='', 
+    alpha=0.75, 
+    size=30, 
+    show=False
+)
+plt.gca().set_xlabel('DC 1')
+plt.gca().set_ylabel('DC 2')
+plt.show()
+```
+
+# Integration with `Scanorama`
+
+[Paper](https://doi.org/10.1038/s41587-019-0113-3), [Docs](https://github.com/brianhie/scanorama)
+
+## Batch-correcting integration
+
+The last method we'll try is `Scanorama`. Like `scVi` and `Harmony` this algorithm produces a corrected low-dimensional embedding. 
+
+```{python}
+sc.external.pp.scanorama_integrate(
+  ad_blood, 
+  key='fetal_ID', 
+  basis='X_pca', 
+  knn=20
+)
+```
+
+## SNN graph estimation
+
+We identify $k = 20$ NNs in the integrated space. 
+
+```{python}
+sc.pp.neighbors(
+    ad_blood, 
+    n_neighbors=20,
+    n_pcs=None,  
+    metric='cosine', 
+    random_state=312, 
+    use_rep='X_scanorama'
+)
+```
+
+## UMAP embedding
+
+```{python}
+sc.tl.umap(ad_blood, random_state=312)
+```
+
+With UMAP the celltype progression is represented correctly, though the transition from the monocyte-macrophage phenotype to the mature Kupffer cells is a bit wonky. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Scanorama-based UMAP embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-umap_embed_scanorama
+sc.pl.embedding(
+    ad_blood, 
+    basis='umap', 
+    color='celltype',
+    title='', 
+    frameon=True, 
+    size=30, 
+    alpha=0.75, 
+    show=False
+)
+plt.gca().set_xlabel('UMAP 1')
+plt.gca().set_ylabel('UMAP 2')
+plt.show()
+```
+
+## Force-directed graph embedding
+
+```{python}
+sc.tl.draw_graph(
+    ad_blood, 
+    layout='fr',  
+    random_state=312,
+    n_jobs=2
+)
+```
+
+The FR embedding is a bit worse and isn't very smoothly connected. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Harmony-based force-directed graph embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-graph_embed_scanorama
+sc.pl.draw_graph(
+    ad_blood, 
+    color='celltype', 
+    title='', 
+    alpha=0.75, 
+    size=30, 
+    show=False
+)
+plt.gca().set_xlabel('FR 1')
+plt.gca().set_ylabel('FR 2')
+plt.show()
+```
+
+## Diffusion map embedding
+
+```{python}
+sc.tl.diffmap(
+    ad_blood, 
+    random_state=312, 
+    n_comps=16
+)
+ad_blood.obsm['X_diffmap_old'] = ad_blood.obsm['X_diffmap']
+ad_blood.obsm['X_diffmap'] = ad_blood.obsm['X_diffmap'][:, 1:] 
+```
+
+The diffusion map embedding is mostly OK, but there's a weird outlier cluster of monocytes located at the minimum of the first component. 
+
+```{python}
+#| code-fold: true
+#| fig-cap: Scanorama-based diffusion map embedding
+#| fig-width: 6
+#| fig-height: 4
+#| label: fig-diffmap_embed_scanorama
+sc.pl.diffmap(
+    ad_blood, 
+    color='celltype', 
+    title='', 
+    alpha=0.75, 
+    size=30, 
+    show=False
+)
+plt.gca().set_xlabel('DC 1')
+plt.gca().set_ylabel('DC 2')
+plt.show()
+```
+
+# Conclusions
+
+Overall, it seems that the `scVI` latent representation of the data performed the best. As for embeddings of that integrated space, I would probably choose the force-directed graph layout, though UMAP also performed well. The primary drawback of this method isn't readily apparent with this dataset - computation time. I've experienced long runtimes (1h+) on even medium-sized datasets of around 25-40k cells. This can make it difficult to experiment and tweak the algorithm's parameters, but overall it tends to perform well without much tuning. As for non-deep learning methods, I would subjectively say that `Scanorama` provided the second-best embeddings, though I've also had good experiences with the R implementation of `Harmony`. As always, it's important to try multiple methods and compare results both visually and quantitatively. 
+
+# Session info
+
+```{r}
+sessioninfo::session_info()
+```

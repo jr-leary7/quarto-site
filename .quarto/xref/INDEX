@@ -37,5 +37,8 @@
   },
   "tutorials/CellRank_Tutorial.qmd": {
     "CellRank_Tutorial.html": "1406be50"
+  },
+  "tutorials/Integration_Tutorial.qmd": {
+    "Integration_Tutorial.html": "b1e95215"
   }
 }

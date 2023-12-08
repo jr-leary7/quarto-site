@@ -23,6 +23,15 @@ website:
   page-navigation: true
   navbar:
     search: true
+    tools:
+      - icon: twitter
+        href: https://twitter.com/leary_jack
+      - icon: github
+        menu:
+          - text: Source Code
+            url:  https://github.com/jr-leary7/quarto-site
+          - text: Report a Bug
+            url:  https://github.com/jr-leary7/quarto-site/issues
     left:
       - index.qmd
       - about.qmd
@@ -31,6 +40,7 @@ website:
           - tutorials/scLANE_Trajectory_DE.qmd
           - tutorials/CellRank_Tutorial.qmd
           - tutorials/SCISSORS_Reclustering.qmd
+          - tutorials/Integration_Tutorial.qmd
           - tutorials/GEE_Benchmarking.qmd
           - tutorials/Seurat_AnnData_Conversion.qmd
       - text: "Derivations"

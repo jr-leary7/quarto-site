@@ -302,7 +302,7 @@ scLANE_res <- testDynamic(seu,
                           genes = top3k_hvg, 
                           size.factor.offset = cell_offset, 
                           n.cores = 6, 
-                          track.time = TRUE)
+                          verbose = FALSE)
 ```
 
 After tidying the TDE results with `getResultsDE()`, we pull a sample of 6 genes from the results & display their test statistics. By default, any gene with an adjusted *p*-value less than 0.01 is predicted to be dynamic, though this threshold can be easily adjusted. 
@@ -400,7 +400,8 @@ p6 <- getFittedValues(scLANE_res,
       labs(x = "Pseudotime", 
            y = "Normalized Expression") + 
       theme_scLANE() + 
-      theme(legend.title = element_blank()) + 
+      theme(legend.title = element_blank(), 
+            strip.text.x = element_text(face = "italic")) + 
       guide_umap()
 p6
 ```
@@ -456,7 +457,8 @@ p7 <- getFittedValues(scLANE_res,
       labs(x = "Pseudotime", 
            y = "Normalized Expression") + 
       theme_scLANE() + 
-      theme(legend.title = element_blank()) + 
+      theme(legend.title = element_blank(), 
+            strip.text.x = element_text(face = "italic")) + 
       guide_umap()
 p7
 ```
@@ -471,9 +473,9 @@ dyn_genes <- filter(scLANE_res_tidy, Gene_Dynamic_Overall == 1) %>%
 knot_df <- getKnotDist(scLANE_res, dyn_genes)
 ```
 
-We'll plot a histogram of the knot values along with a ridgeplot of the pseudotime distribution for each celltype. We see that the majority of the selected knots are placed at the beginning of the trajectory, around where the ductal cells transition into endocrine progenitors. A smaller set of knots is placed about halfway through the trajectory, which we've annotated as the point at which pre-endocrine cells begin differentiating into mature endocrine phenotypes. 
+We'll plot a histogram of the knot values along with a ridgeplot of the pseudotime distribution for each celltype. We see that a large number of the selected knots are placed at the beginning of the trajectory, around where the ductal cells transition into endocrine progenitors. A smaller set of knots is placed about halfway through the trajectory, which we've annotated as the point at which pre-endocrine cells begin differentiating into mature endocrine phenotypes. 
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 #| code-fold: true
 #| fig-cap: Distribution of adaptively-chosen knots from scLANE
 #| fig-width: 9
@@ -514,7 +516,7 @@ p10
 
 We can extract a matrix of fitted values using `smoothedCountsMatrix()`; here we focus on the top 2,000 most dynamic genes, with the goal of identifying clusters of similarly-expressed genes. Next, the `embedGenes()` function reduces dimensionality with PCA, clusters the genes using the Leiden algorithm, & embeds the genes in two dimensions with UMAP.  
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 smoothed_counts <- smoothedCountsMatrix(scLANE_res, 
                                         pt = sling_pt, 
                                         genes = dyn_genes[1:2000], 
@@ -655,7 +657,7 @@ mutate(enrich_res$result,
   rename(cluster = query) %>% 
   with_groups(cluster, 
               slice_head,
-              n = 3) %>% 
+              n = 4) %>% 
   select(cluster, term_name, p_value, term_size, query_size, intersection_size, term_id) %>% 
   kableExtra::kbl(digits = 3, 
                   booktabs = TRUE, 
@@ -667,9 +669,9 @@ mutate(enrich_res$result,
 We can use the `geneProgramScoring()` function to add module scores for each gene cluster to our `Seurat` object. 
 
 ```{r}
-program_labels <- c("organogenesis", 
-                    "cell cycle", 
+program_labels <- c("cell cycle", 
                     "peptide production", 
+                    "organogenesis", 
                     "differentiation")
 seu <- geneProgramScoring(seu, 
                           genes = gene_embed$gene, 
