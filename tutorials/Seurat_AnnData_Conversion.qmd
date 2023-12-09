@@ -27,7 +27,7 @@ execute:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, comment = NA, fig.width = 9, fig.height = 6, fig.retina = TRUE)
-reticulate::use_virtualenv("~/Desktop/Python/science/venv/", required = TRUE)
+reticulate::use_virtualenv("~/Desktop/PhD/Research/Python_Envs/personal_site/", required = TRUE)
 ```
 
 # Introduction 
@@ -40,7 +40,8 @@ There are several libraries that facilitate conversions from R-based scRNA-seq d
 
 ## R
 
-```{r, message=FALSE, warning=FALSE, results='hide'}
+```{r}
+#| results: hide
 library(dplyr)       # data manipulation
 library(Seurat)      # scRNA-seq tools 
 library(ggplot2)     # plots
@@ -52,7 +53,8 @@ library(reticulate)  # Python interface
 
 ## Python
 
-```{python, message=FALSE, warning=FALSE, results='hide'}
+```{python}
+#| results: hide
 import numpy as np                   # linear algebra tools
 import pandas as pd                  # data manipulation
 import scanpy as sc                  # scRNA-seq tools
@@ -64,12 +66,47 @@ from plotnine import theme_classic   # plot themes
 from scipy.sparse import csr_matrix  # sparse matrices
 ```
 
-We tweak our `matplotlib` settings to match `ggplot2::theme_classic()`, which is my preferred theme. 
+We also tweak our `matplotlib` settings to match `ggplot2::theme_classic()`, which is my preferred theme. 
 
-```{python, results='hide'}
-gg_theme = theme_classic()
-plt.rcParams.update(gg_theme.rcParams)
-plt.ion()
+```{python}
+#| code-fold: true
+base_size = 12
+plt.rcParams.update({
+    # font
+    'font.size': base_size, 
+    'font.weight': 'normal',
+    # figure
+    'figure.dpi': 300, 
+    'figure.edgecolor': 'white', 
+    'figure.facecolor': 'white', 
+    'figure.figsize': (6, 4), 
+    'figure.constrained_layout.use': True,
+    # axes
+    'axes.edgecolor': 'black',
+    'axes.grid': False,
+    'axes.labelpad': 2.75,
+    'axes.labelsize': base_size * 0.8,
+    'axes.linewidth': 1.5,
+    'axes.spines.right': False,
+    'axes.spines.top': False,
+    'axes.titlelocation': 'left',
+    'axes.titlepad': 11,
+    'axes.titlesize': base_size,
+    'axes.titleweight': 'normal',
+    'axes.xmargin': 0.1, 
+    'axes.ymargin': 0.1, 
+    # legend
+    'legend.borderaxespad': 1,
+    'legend.borderpad': 0.5,
+    'legend.columnspacing': 2,
+    'legend.fontsize': base_size * 0.8,
+    'legend.frameon': False,
+    'legend.handleheight': 1,
+    'legend.handlelength': 1.2,
+    'legend.labelspacing': 1,
+    'legend.title_fontsize': base_size, 
+    'legend.markerscale': 1.25
+})
 ```
 
 # Data 
@@ -77,6 +114,7 @@ plt.ion()
 First we'll load a dataset to analyze; I'm a fan of the neural development data from [La Manno *et al* (2016)](https://doi.org/10.1016/j.cell.2016.09.027) as a good example for trajectory / velocity methods. The dataset is available in the `scRNAseq` package, though we'll need to convert it from the default `SingleCellExperiment` format to a `Seurat` object first. 
 
 ```{r}
+#| results: hide
 brain <- scRNAseq::LaMannoBrainData(which = "human-embryo")
 brain <- CreateSeuratObject(counts = counts(brain), 
                             project = "neural_development", 
@@ -96,10 +134,6 @@ We'll start by running the data through a very typical preprocessing pipeline co
 brain <- brain %>% 
          PercentageFeatureSet(pattern = "^RP[SL]", col.name = "percent_ribo") %>% 
          PercentageFeatureSet(pattern = "^MT-", col.name = "percent_mito") %>% 
-         CellCycleScoring(s.features = cc.genes.updated.2019$s.genes, 
-                          g2m.features = cc.genes.updated.2019$g2m.genes, 
-                          set.ident = FALSE) %>% 
-         AddMetaData(metadata = .$S.Score - .$G2M.Score, col.name = "CC_difference") %>% 
          NormalizeData(verbose = FALSE) %>% 
          ScaleData(verbose = FALSE) %>% 
          FindVariableFeatures(nfeatures = 3000, verbose = FALSE) %>% 
@@ -108,6 +142,10 @@ brain <- brain %>%
                 verbose = FALSE, 
                 seed.use = 312, 
                 approx = TRUE) %>% 
+         CellCycleScoring(s.features = cc.genes.updated.2019$s.genes, 
+                          g2m.features = cc.genes.updated.2019$g2m.genes, 
+                          set.ident = FALSE) %>% 
+         AddMetaData(.$S.Score - .$G2M.Score, col.name = "CC_difference") %>% 
          RunUMAP(reduction = "pca", 
                  dims = 1:30, 
                  return.model = TRUE, 
@@ -150,7 +188,7 @@ brain@meta.data <- mutate(brain@meta.data,
                                           Timepoint == "week_11" ~ 11,
                                           TRUE ~ NA_real_), 
                           age = as.factor(age), 
-                          broad_celltype = case_when(Cell_type %in% c("hOMTN") ~ "Oculomotor & Trochlear Nucleus", 
+                          broad_celltype = case_when(Cell_type %in% c("hOMTN") ~ "OMT Nucleus", 
                                                      Cell_type %in% c("hSert") ~ "Serotonergic", 
                                                      Cell_type %in% c("hGaba", "hNbGaba") ~ "Gabaergic", 
                                                      Cell_type %in% c("hDA0", "hDA1", "hDA2") ~ "Dopaminergic", 
@@ -179,10 +217,8 @@ palette_cc <- paletteer_d("ggsci::default_locuszoom")
 We'll also create a clean theme & legend settings for our dimension reduction plots. 
 
 ```{r}
-theme_umap <- function(base.size = 14) {
-  theme_classic(base_size = base.size, 
-                base_line_size = 0.75, 
-                base_rect_size = 0.75) + 
+theme_umap <- function(base.size = 1) {
+  scLANE::theme_scLANE() + 
   theme(axis.ticks = element_blank(), 
         axis.text = element_blank(), 
         plot.subtitle = element_text(face = "italic"), 
@@ -195,7 +231,12 @@ guide_umap <- function(key.size = 4) {
 
 We plot the unsupervised graph-based clustering, the true celltype labels, cell ages, & estimated cell cycle phase on our UMAP embedding. 
 
-```{r, fig.width=14, fig.height=8}
+```{r}
+#| code-fold: true
+#| fig-cap: Overview of the neural development dataset
+#| fig-width: 12
+#| fig-height: 6
+#| label: fig-overview
 p0 <- DimPlot(brain, 
               group.by = "seurat_clusters", 
               cols = alpha(0.75, colour = palette_cluster), 
@@ -265,8 +306,9 @@ if (!dir.exists("./conversion_files/")) {
 
 First, we'll write the counts matrices to a sparse matrix market file, which can be read into Python via `scipy`. **Note**: the `AnnData` ecosystem is built around $\text{cell} \times \text{gene}$ counts matrices, which is transposed from how R-based single cell data structures store them. Make sure to transpose them in either R or Python before creating an `AnnData` object. 
 
-```{r, results='hide'}
-Matrix::writeMM(brain@assays$RNA@counts, file = "./conversion_files/RNA_counts.mtx")
+```{r}
+#| results: hide
+Matrix::writeMM(brain@assays$RNA@layers$counts, file = "./conversion_files/RNA_counts.mtx")
 ```
 
 ### Cell & Gene Metadata
@@ -360,7 +402,8 @@ umap_reembed <- uwot::umap(X = brain@reductions$pca@cell.embeddings,
 
 Now that we've created our data, we write it to files. 
 
-```{r, results='hide'}
+```{r}
+#| results: hide
 Matrix::writeMM(knn_dist_mat, file = "./conversion_files/KNN_distances.mtx")
 Matrix::writeMM(umap_reembed$fgraph, file = "./conversion_files/UMAP_connectivity_matrix.mtx")
 readr::write_csv(as.data.frame(brain@neighbors$RNA.nn@nn.idx), 
@@ -440,6 +483,9 @@ adata
 When plotting the UMAP embedding, we can see that the coordinates & colors have been preserved. 
 
 ```{python}
+#| code-fold: true
+#| fig-cap: UMAP Embedding from Seurat
+#| label: fig-seurat_umap
 ax = sc.pl.scatter(
   adata, 
   basis='umap',
@@ -448,16 +494,9 @@ ax = sc.pl.scatter(
   frameon=True, 
   show=False, 
   legend_fontsize=10, 
-  right_margin=0.7
 )
-ax.spines['right'].set_visible(False)
-ax.spines['top'].set_visible(False)
-ax.spines['bottom'].set_linewidth(1.5)
-ax.spines['left'].set_linewidth(1.5)
 ax.set_xlabel('UMAP 1')
 ax.set_ylabel('UMAP 2')
-ax.set_title(label='UMAP Embedding from Seurat', loc='left')
-plt.gcf().set_dpi(320)
 plt.show()
 ```
 
@@ -468,8 +507,19 @@ sc.pp.filter_genes_dispersion(adata, flavor='seurat', n_top_genes=3000)
 sc.pp.normalize_per_cell(adata)
 sc.pp.log1p(adata)
 sc.pp.scale(adata)
-sc.tl.draw_graph(adata, layout='fr', random_state=312)
+sc.tl.draw_graph(
+  adata,
+  layout='fr',
+  n_jobs=2,
+  random_state=312
+)
 sc.tl.diffmap(adata, random_state=312)
+```
+
+```{python}
+#| code-fold: true
+#| fig-cap: Diffusion map embedding colored by celltype
+#| label: fig-diffmap
 ax = sc.pl.scatter(
   adata,
   basis='diffmap',
@@ -477,24 +527,20 @@ ax = sc.pl.scatter(
   title='', 
   frameon=True, 
   show=False, 
-  legend_fontsize=10, 
-  right_margin=0.7
+  legend_fontsize=10
 )
-ax.spines['right'].set_visible(False)
-ax.spines['top'].set_visible(False)
-ax.spines['bottom'].set_linewidth(1.5)
-ax.spines['left'].set_linewidth(1.5)
 ax.set_xlabel('DC 1')
 ax.set_ylabel('DC 2')
-ax.set_title(label='Diffusion Map Embedding of Fine Celltypes', loc='left')
-plt.gcf().set_dpi(320)
 plt.show()
 ```
 
 We assign a root cell belonging to the progenitor population, then estimate diffusion pseudotime for each cell, and finally plot the results with our diffusion map embedding. 
 
 ```{python}
-adata.uns['iroot'] = np.flatnonzero(adata.obs['broad_celltype']  == 'Progenitor')[0]
+#| code-fold: true
+#| fig-cap: Diffusion pseudotime
+#| label: fig-dpt
+adata.uns['iroot'] = np.argmin(adata.obsm['X_diffmap'][1])
 sc.tl.dpt(adata)
 ax = sc.pl.scatter(
   adata, 
@@ -505,20 +551,17 @@ ax = sc.pl.scatter(
   legend_fontsize=10, 
   show=False
 )
-ax.spines['right'].set_visible(False)
-ax.spines['top'].set_visible(False)
-ax.spines['bottom'].set_linewidth(1.5)
-ax.spines['left'].set_linewidth(1.5)
 ax.set_xlabel('DC 1')
 ax.set_ylabel('DC 2')
-ax.set_title(label='Diffusion Pseudotime', loc='left')
-plt.gcf().set_dpi(320)
 plt.show()
 ```
 
 When plotting the distribution of diffusion pseudotime for each coarse celltype, we see that more immature celltypes such as progenitors have lower values, whereas more mature celltypes like endothelial cells & microglia have larger values. This indicates that our DPT estimate is a decent proxy for progression through the underlying biological process. 
  
 ```{python}
+#| code-fold: true
+#| fig-cap: Diffusion pseudotime distribution by celltype
+#| label: fig-dpt_violin
 violin_order = pd.DataFrame(adata.obs[['broad_celltype', 'dpt_pseudotime']]) \
                  .groupby('broad_celltype')['dpt_pseudotime'].mean() \
                  .sort_values(ascending=True) \
@@ -534,15 +577,10 @@ ax = sc.pl.violin(
   scale='width', 
   stripplot=False
 )
-ax.spines['right'].set_visible(False)
-ax.spines['top'].set_visible(False)
-ax.spines['bottom'].set_linewidth(1.5)
-ax.spines['left'].set_linewidth(1.5)
 ax.set_ylabel('Diffusion Pseudotime')
 ax.set_xlabel(None)
 ax.set_xticklabels(violin_order, rotation=40, ha='right')
 ax.set_position([0.1, 0.375, 0.85, 0.575]) 
-plt.gcf().set_dpi(320)
 plt.show()
 ```
 
@@ -576,29 +614,34 @@ brain@reductions$diffmap <- CreateDimReducObject(embeddings = diffmap_embed,
 We can plot the DPT estimates on our UMAP embedding:
 
 ```{r}
+#| code-fold: true
+#| fig-cap: Diffusion pseudotime from Scanpy
+#| label: fig-dpt_umap_seurat
 FeaturePlot(brain, 
             features = "scanpy_dpt", 
             reduction = "umap", 
             pt.size = 1) + 
   scale_color_gradientn(colours = viridisLite::inferno(n = 20), 
                         labels = scales::label_number(accuracy = .1)) + 
-  labs(x = "UMAP 1",
-       y = "UMAP 2",
-       title = "Diffusion Pseudotime", 
-       subtitle = "Estimated using Scanpy") + 
-  theme_umap()
+  labs(x = "UMAP 1", y = "UMAP 2") + 
+  theme_umap() + 
+  theme(plot.title = element_blank())
 ```
 
-We can also visualize gene dynamics over pseudotime for a few genes of interest. For example, we see that fibronectin 1 (FN1) is highly expressed towards the end of the biological process, specifically in pericyte & endothelial cells. These two celltypes form part of the blood-brain barrier, & are closely related to one another ([source](https://en.wikipedia.org/wiki/Pericyte#Blood–brain_barrier)). 
+We can also visualize gene dynamics over pseudotime for a few genes of interest. For example, we see that fibronectin 1 (*FN1*) is highly expressed towards the end of the biological process, specifically in pericyte & endothelial cells. These two celltypes form part of the blood-brain barrier, & are closely related to one another ([source](https://en.wikipedia.org/wiki/Pericyte#Blood–brain_barrier)). 
 
-```{r, fig.width=12}
+```{r}
+#| code-fold: true
+#| fig-cap: Pseudotemporal gene dynamics during human embryonic neurogenesis
+#| label: fig-gene_dynamics
+#| fig-width: 12
 data.frame(cell = colnames(brain), 
            celltype = brain$broad_celltype, 
            dpt = brain$scanpy_dpt, 
-           LGALS1 = GetAssayData(brain, "data")["LGALS1", ], 
-           COL4A1 = GetAssayData(brain, "data")["COL4A1", ], 
-           RGS5 = GetAssayData(brain, "data")["RGS5", ], 
-           FN1 = GetAssayData(brain, "data")["FN1", ]) %>% 
+           LGALS1 = GetAssayData(brain, "RNA")["LGALS1", ], 
+           COL4A1 = GetAssayData(brain, "RNA")["COL4A1", ], 
+           RGS5 = GetAssayData(brain, "RNA")["RGS5", ], 
+           FN1 = GetAssayData(brain, "RNA")["FN1", ]) %>% 
   tidyr::pivot_longer(cols = !c(cell, celltype, dpt), 
                       names_to = "gene", 
                       values_to = "expression") %>% 
@@ -616,18 +659,10 @@ data.frame(cell = colnames(brain),
   scale_x_continuous(labels = scales::label_number(accuracy = .1)) + 
   scale_y_continuous(limits = c(0, NA), labels = scales::label_number(accuracy = 1)) + 
   scale_color_manual(values = palette_celltype) + 
-  labs(x = "Diffusion Pseudotime", 
-       y = "Expression", 
-       title = "Pseudotemporal Gene Dynamics During Human Embryonic Neurogenesis", 
-       caption = "Pseudotime estimated using Scanpy") + 
-  theme_classic(base_size = 14, 
-                base_line_size = 0.75, 
-                base_rect_size = 0.75) + 
-  theme(plot.caption = element_text(size = 11, face = "italic"), 
-        legend.title = element_blank(), 
-        strip.text.x = element_text(face = "italic"), 
-        strip.clip = "off", 
-        strip.background = element_rect(linewidth = 0.75)) + 
+  labs(x = "Diffusion Pseudotime", y = "Normalized Expression") + 
+  scLANE::theme_scLANE() + 
+  theme(legend.title = element_blank(), 
+        strip.text.x = element_text(face = "italic")) + 
   guides(color = guide_legend(override.aes = list(alpha = 1, size = 4)))
 ```
 
