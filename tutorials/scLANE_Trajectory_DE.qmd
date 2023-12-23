@@ -29,7 +29,8 @@ execute:
   freeze: auto
 ---
 
-```{r setup, include=FALSE}
+```{r setup}
+#| include: false
 knitr::opts_chunk$set(fig.width = 9, fig.height = 6, comment = NA)
 reticulate::use_virtualenv("~/Desktop/PhD/Research/Python_Envs/personal_site/", required = TRUE)
 set.seed(312)
@@ -43,13 +44,17 @@ In this tutorial we'll walk through a basic trajectory differential expression a
 
 If you haven't already, install the development version (currently v`r packageVersion("scLANE")`) of `scLANE` from [the GitHub repository](https://github.com/jr-leary7/scLANE).
 
-```{r, eval=FALSE}
+```{r}
+#| eval: false
 remotes::install_github("jr-leary7/scLANE")
 ```
 
 Next, we'll load the packages we need to process, analyze, & visualize our data. 
 
-```{r, message=FALSE, warning=FALSE, results='hide'}
+```{r}
+#| message: false
+#| warning: false
+#| results: hide
 library(dplyr)           # data manipulation
 library(scLANE)          # trajectory DE 
 library(Seurat)          # scRNA-seq tools
@@ -89,7 +94,8 @@ palette_heatmap <- paletteer::paletteer_d("wesanderson::Zissou1")
 
 We'll load the well-known pancreatic endocrinogenesis data from [Bastidas-Ponce *et al* (2019)](https://doi.org/10.1242/dev.173849), which comes with the `scVelo` Python library & has been used in several pseudotime inference / RNA velocity method papers as a good benchmark dataset due to the simplicity of the underlying trajectory manifold. 
 
-```{python, results='hide'}
+```{python}
+#| results: hide
 import scvelo as scv
 adata = scv.datasets.pancreas()
 ```
@@ -144,7 +150,11 @@ seu@assays$RNA <- rna_assay
 seu <- seu[rowSums(seu@assays$spliced) > 3, ]
 ```
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+#| results: hide
 system("rm -rf ./data")  # remove data/ directory created by downloading pancreas .h5ad file
 rm(meta_data, rna_assay, rna_counts, spliced_assay, spliced_counts, unspliced_assay, unspliced_counts)
 ```
@@ -153,7 +163,9 @@ rm(meta_data, rna_assay, rna_counts, spliced_assay, spliced_counts, unspliced_as
 
 We preprocess the counts using a typical pipeline with QC, normalization & scaling, dimension reduction, and graph-based clustering via the Leiden algorithm. 
 
-```{r, message=FALSE, warning=FALSE}
+```{r}
+#| message: false  
+#| warning: false
 seu <- PercentageFeatureSet(seu, 
                             pattern = "^mt-", 
                             col.name = "percent_mito", 
@@ -297,12 +309,12 @@ top3k_hvg <- HVFInfo(seu) %>%
              slice_head(n = 3000) %>% 
              rownames(.)
 cell_offset <- createCellOffset(seu)
-scLANE_res <- testDynamic(seu, 
-                          pt = sling_pt, 
-                          genes = top3k_hvg, 
-                          size.factor.offset = cell_offset, 
-                          n.cores = 6, 
-                          verbose = FALSE)
+scLANE_models <- testDynamic(seu, 
+                             pt = sling_pt, 
+                             genes = top3k_hvg, 
+                             size.factor.offset = cell_offset, 
+                             n.cores = 5, 
+                             verbose = FALSE)
 ```
 
 After tidying the TDE results with `getResultsDE()`, we pull a sample of 6 genes from the results & display their test statistics. By default, any gene with an adjusted *p*-value less than 0.01 is predicted to be dynamic, though this threshold can be easily adjusted. 
@@ -310,7 +322,7 @@ After tidying the TDE results with `getResultsDE()`, we pull a sample of 6 genes
 ```{r}
 #| tbl-cap: TDE test results from scLANE
 #| label: tbl-scLANE_res
-scLANE_res_tidy <- getResultsDE(scLANE_res)
+scLANE_res_tidy <- getResultsDE(scLANE_models)
 select(scLANE_res_tidy, 
        Gene, 
        Test_Stat, 
@@ -335,7 +347,7 @@ Next, we can use the `plotModels()` function to visualize the fitted models from
 #| fig-width: 9
 #| fig-height: 5
 #| label: fig-model_comp
-p5 <- plotModels(scLANE_res, 
+p5 <- plotModels(scLANE_models, 
                  gene = "Neurog3", 
                  pt = sling_pt, 
                  expr.mat = seu, 
@@ -350,7 +362,7 @@ p5
 
 ## Gene dynamics plots
 
-Using the `getFittedValues()` function allows us to generate predictions from the models we fit, which we then use to visualize the dynamics of a few genes that are known to be strongly associated with the differentiation of immature cells into mature endocrine phenotypes. For all four genes, the fitted models show knots chosen in the area of pseudotime around the pre-endocrine cells. This tells us that these driver genes are being upregulated in precursor celltypes & are driving differentiation into the mature celltypes such as alpha & beta cells, after which the genes are downregulated. 
+Using the `getFittedValues()` function allows us to generate predictions from the models we fit, which we then use to visualize the dynamics of a few genes that are known to be strongly associated with the differentiation of immature progenitors into mature endocrine phenotypes ([source 1](https://doi.org/10.1038/s41467-018-06176-3), [source 2](https://doi.org/10.1242/dev.173849)). For all four genes, the fitted models show knots chosen in the area of pseudotime around the pre-endocrine cells. This tells us that these driver genes are being upregulated in precursor celltypes & are driving differentiation into the mature celltypes such as alpha & beta cells, after which the genes are downregulated. 
 
 ```{r}
 #| code-fold: true
@@ -358,7 +370,7 @@ Using the `getFittedValues()` function allows us to generate predictions from th
 #| fig-width: 12
 #| fig-height: 6
 #| label: fig-model_scLANE
-p6 <- getFittedValues(scLANE_res, 
+p6 <- getFittedValues(scLANE_models, 
                       genes = c("Chga", "Chgb", "Fev", "Cck"), 
                       pt = sling_pt, 
                       expr.mat = seu, 
@@ -372,19 +384,19 @@ p6 <- getFittedValues(scLANE_res,
                  size = 2, 
                  alpha = 0.75, 
                  stroke = 0) + 
-      geom_vline(data = data.frame(gene = "Chga", knot = unique(scLANE_res$Chga$Lineage_A$MARGE_Slope_Data$Breakpoint)), 
+      geom_vline(data = data.frame(gene = "Chga", knot = unique(scLANE_models$Chga$Lineage_A$MARGE_Slope_Data$Breakpoint)), 
                  mapping = aes(xintercept = knot), 
                  linetype = "dashed", 
                  color = "grey20") + 
-      geom_vline(data = data.frame(gene = "Chgb", knot = unique(scLANE_res$Chgb$Lineage_A$MARGE_Slope_Data$Breakpoint)), 
+      geom_vline(data = data.frame(gene = "Chgb", knot = unique(scLANE_models$Chgb$Lineage_A$MARGE_Slope_Data$Breakpoint)), 
                  mapping = aes(xintercept = knot), 
                  linetype = "dashed", 
                  color = "grey20") + 
-      geom_vline(data = data.frame(gene = "Cck", knot = unique(scLANE_res$Cck$Lineage_A$MARGE_Slope_Data$Breakpoint)), 
+      geom_vline(data = data.frame(gene = "Cck", knot = unique(scLANE_models$Cck$Lineage_A$MARGE_Slope_Data$Breakpoint)), 
                  mapping = aes(xintercept = knot), 
                  linetype = "dashed", 
                  color = "grey20") + 
-      geom_vline(data = data.frame(gene = "Fev", knot = unique(scLANE_res$Fev$Lineage_A$MARGE_Slope_Data$Breakpoint)), 
+      geom_vline(data = data.frame(gene = "Fev", knot = unique(scLANE_models$Fev$Lineage_A$MARGE_Slope_Data$Breakpoint)), 
                  mapping = aes(xintercept = knot), 
                  linetype = "dashed", 
                  color = "grey20") + 
@@ -414,7 +426,7 @@ On the other hand, if we use additive models the "peak" of expression is placed 
 #| fig-width: 12
 #| fig-height: 6
 #| label: fig-model_GAM
-p7 <- getFittedValues(scLANE_res, 
+p7 <- getFittedValues(scLANE_models, 
                       genes = c("Chga", "Chgb", "Fev", "Cck"), 
                       pt = sling_pt, 
                       expr.mat = seu, 
@@ -470,7 +482,7 @@ Let's take a broader view of the dataset by examining the distribution of adapti
 ```{r}
 dyn_genes <- filter(scLANE_res_tidy, Gene_Dynamic_Overall == 1) %>% 
              pull(Gene)
-knot_df <- getKnotDist(scLANE_res, dyn_genes)
+knot_df <- getKnotDist(scLANE_models, dyn_genes)
 ```
 
 We'll plot a histogram of the knot values along with a ridgeplot of the pseudotime distribution for each celltype. We see that a large number of the selected knots are placed at the beginning of the trajectory, around where the ductal cells transition into endocrine progenitors. A smaller set of knots is placed about halfway through the trajectory, which we've annotated as the point at which pre-endocrine cells begin differentiating into mature endocrine phenotypes. 
@@ -516,13 +528,15 @@ p10
 
 We can extract a matrix of fitted values using `smoothedCountsMatrix()`; here we focus on the top 2,000 most dynamic genes, with the goal of identifying clusters of similarly-expressed genes. Next, the `embedGenes()` function reduces dimensionality with PCA, clusters the genes using the Leiden algorithm, & embeds the genes in two dimensions with UMAP.  
 
-```{r, message=FALSE, warning=FALSE}
-smoothed_counts <- smoothedCountsMatrix(scLANE_res, 
+```{r}
+#| message: false
+#| warning: false
+smoothed_counts <- smoothedCountsMatrix(scLANE_models, 
                                         pt = sling_pt, 
                                         genes = dyn_genes[1:2000], 
                                         size.factor.offset = cell_offset, 
-                                        n.cores = 2)
-gene_embed <- embedGenes(smoothed_counts$Lineage_A)
+                                        n.cores = 2L)
+gene_embed <- embedGenes(log1p(smoothed_counts$Lineage_A), resolution.param = 0.2)
 ```
 
 First we'll visualize the gene clusters on the first two PCs. 
@@ -553,7 +567,7 @@ p12 <- ggplot(gene_embed, aes(x = umap1, y = umap2, color = leiden)) +
        geom_point(size = 2, alpha = 0.75, stroke = 0) + 
        labs(x = "UMAP 1", 
             y = "UMAP 2", 
-            color = "Leiden Cluster") +
+            color = "Gene Cluster") +
        paletteer::scale_color_paletteer_d("ggsci::default_igv") + 
        theme_scLANE() + 
        theme_umap() + 
@@ -650,14 +664,14 @@ enrich_res <- gprofiler2::gost(gene_clust_list,
 A look at the top 3 most-significant GO terms for each gene cluster reveals heterogeneous functionalities across groups of genes.
 
 ```{r}
-#| tbl-cap: Top 3 biological process GO terms per cluster
+#| tbl-cap: Top 5 biological process GO terms per cluster
 #| label: tbl-go_bp
 mutate(enrich_res$result, 
        query = gsub("Leiden_", "", query)) %>% 
   rename(cluster = query) %>% 
   with_groups(cluster, 
               slice_head,
-              n = 4) %>% 
+              n = 5) %>% 
   select(cluster, term_name, p_value, term_size, query_size, intersection_size, term_id) %>% 
   kableExtra::kbl(digits = 3, 
                   booktabs = TRUE, 
@@ -669,10 +683,11 @@ mutate(enrich_res$result,
 We can use the `geneProgramScoring()` function to add module scores for each gene cluster to our `Seurat` object. 
 
 ```{r}
-program_labels <- c("cell cycle", 
+program_labels <- c("organogenesis", 
                     "peptide production", 
-                    "organogenesis", 
-                    "differentiation")
+                    "regulation of organogenesis", 
+                    "differentiation", 
+                    "cell cycle")
 seu <- geneProgramScoring(seu, 
                           genes = gene_embed$gene, 
                           gene.clusters = gene_embed$leiden, 
@@ -707,20 +722,73 @@ We can also visualize the trend in the peptide program scores over time, which c
 
 ```{r}
 #| code-fold: true
+#| message: false
 #| fig-cap: Peptide production gene program scores over pseudotime
 #| label: fig-peptide_smoother
 p15 <- data.frame(PT = sling_pt$PT, 
                   peptide_program_score = seu$peptide_production, 
                   celltype = seu$celltype) %>% 
        ggplot(aes(x = PT, y = peptide_program_score, color = celltype)) + 
-       geom_point(alpha = 0.75, stroke = 0, size = 2) + 
-       geom_smooth(color = "black", method = "loess") + 
+       geom_point(alpha = 0.75, 
+                  stroke = 0, 
+                  size = 2) + 
+       geom_smooth(color = "black", 
+                   method = "loess", 
+                   linewidth = 0.75) + 
        scale_color_manual(values = palette_celltype) + 
        labs(x = "Pseudotime", y = "Peptide Program Score") + 
        theme_scLANE() + 
        theme(legend.title = element_blank()) + 
        guide_umap()
 p15
+```
+
+Next, in order to identify which genes are "drivers" of a certain gene program, we can use the `geneProgramDrivers()` function to correlate normalized expression with program scores. 
+
+```{r}
+program_drivers <- geneProgramDrivers(seu, 
+                                      genes = gene_embed$gene, 
+                                      gene.program = seu$peptide_production)
+```
+
+We display the top 10 most-correlated genes here. For example, retinol-binding protein 4 (*Rbp4*) is a known marker of pancreatic islet cells, and of delta cells more specifically ([source](https://doi.org/10.1038/s42255-023-00876-x)).
+
+```{r}
+#| tbl-cap: Top 10 driver genes for the peptide production gene program
+#| label: tbl-driver_genes
+slice_head(program_drivers, n = 10) %>% 
+  kableExtra::kbl(digits = 3, 
+                  booktabs = TRUE, 
+                  row.names = FALSE,
+                  col.names = c("Gene", "Correlation", "P-value", "Adj. P-value")) %>% 
+  kableExtra::kable_classic(c("hover"), full_width = FALSE)
+```
+
+Indeed, normalized expression of *Rbp4* is high across all mature endocrine celltypes, with delta cells showing the highest overall mean expression.
+
+```{r}
+#| code-fold: true
+#| message: false
+#| fig-cap: Driver gene expression by celltype
+#| label: fig-driver_gene_exp
+#| fig-width: 9
+#| fig-height: 5
+p16 <- data.frame(celltype = seu$celltype, 
+                  rna = seu@assays$spliced@data["Rbp4", ]) %>% 
+       ggplot(aes(x = celltype, y = rna, color = celltype)) + 
+       ggbeeswarm::geom_quasirandom(alpha = 0.75, 
+                                    size = 2, 
+                                    stroke = 0, 
+                                    show.legend = FALSE) +
+       scale_color_manual(values = palette_celltype) + 
+       stat_summary(fun = "mean", 
+                    geom = "point", 
+                    color = "black",
+                    size = 3) + 
+       labs(y = "Normalized Expression") + 
+       theme_scLANE() + 
+       theme(axis.title.x = element_blank())
+p16
 ```
 
 # Conclusions
