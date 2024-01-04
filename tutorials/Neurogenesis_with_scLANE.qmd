@@ -1,0 +1,861 @@
+---
+title: "Investigating Transcription Factor Activity During Neurogenesis"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  orcid: 0009-0004-8821-3269
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: today
+date-format: long
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    fig-format: retina
+    fig-width: 9
+    fig-height: 6
+    df-print: kable
+    link-external-newwindow: true
+execute:
+  cache: false
+  freeze: auto
+---
+
+```{r setup}
+#| include: false
+#| message: false
+#| warning: false
+knitr::opts_chunk$set(comment = NA)
+reticulate::use_virtualenv("~/Desktop/PhD/Research/Python_Envs/personal_site/", required = TRUE)
+set.seed(312)
+```
+
+# Introduction
+
+# Libraries
+
+```{r}
+#| message: false
+#| warning: false
+library(dplyr)                 # data manipulation
+library(Seurat)                # scRNA-seq tools
+library(scLANE)                # trajectory DE
+library(ggplot2)               # pretty plots
+library(slingshot)             # pseudotime estimation
+library(SingleCellExperiment)  # scRNA-seq data structures
+```
+
+# Color palettes
+
+```{r}
+palette_celltype <- paletteer::paletteer_d("ggsci::category10_d3")
+palette_cluster <- paletteer::paletteer_d("ggsci::nrc_npg")
+palette_week <- paletteer::paletteer_d("ggsci::default_igv")
+palette_heatmap <- paletteer::paletteer_d("MetBrewer::Hiroshige", direction = -1)
+```
+
+# Data
+
+We begin by reading in the data from [Zhong *et al* (2018)](https://doi.org/10.1038/nature25980), which contains 2,394 cells from developing human prefrontal cortex (PFC) samples. The counts and metadata are handily available in the `scRNAseq` package. 
+
+```{r}
+#| results: hide
+#| message: false
+#| warning: false
+sce_brain <- scRNAseq::ZhongPrefrontalData()
+seu_brain <- CreateSeuratObject(counts(sce_brain), 
+                                assay = "RNA", 
+                                meta.data = as.data.frame(colData(sce_brain)), 
+                                project = "neurogenesis", 
+                                min.cells = 0,
+                                min.features = 0)
+```
+
+# Preprocessing
+
+First, we'll need to integrate expression across the `r length(unique(seu_brain$sample))` samples. We'll do this using the new `Layers` functionality implemented in `Seurat` v5 ([vignette](https://satijalab.org/seurat/articles/seurat5_integration)). 
+
+```{r}
+seu_brain[["RNA"]] <- split(seu_brain[["RNA"]], f = seu_brain$sample)
+```
+
+Next, we normalize the counts, identify highly variable genes (HVGs), and run PCA - all of these are required prior to integration.
+
+```{r}
+seu_brain <- NormalizeData(seu_brain, verbose = FALSE) %>% 
+             FindVariableFeatures(nfeatures = 3000, verbose = FALSE) %>% 
+             ScaleData(verbose = FALSE) %>% 
+             RunPCA(npcs = 50, 
+                    verbose = FALSE, 
+                    seed.use = 312, 
+                    approx = TRUE)
+```
+
+We use [canonical correlation analysis integration](https://doi.org/10.1038/nbt.4096) to harmonize our samples. It's necessary to tweak a few of the nearest-neighbor-related parameters since some of our samples have few cells.  
+
+```{r}
+#| message: false
+#| warning: false
+#| results: hide
+seu_brain <- IntegrateLayers(seu_brain, 
+                             method = CCAIntegration, 
+                             orig.reduction = "pca", 
+                             new.reduction = "integrated.cca", 
+                             k.weight = 10, 
+                             k.anchor = 10, 
+                             k.score = 10, 
+                             k.filter = 10, 
+                             dims = 1:10, 
+                             nn.method = "annoy", 
+                             normalization.method = "LogNormalize", 
+                             verbose = FALSE)
+```
+
+We perform dimension reduction with UMAP, embed the cells in a shared nearest-neighbor (SNN) graph, and partition the graph into clusters via the Louvain algorithm. We also identify subclusters in two of the larger main clusters. 
+
+```{r}
+#| message: false
+#| warning: false
+seu_brain <- RunUMAP(seu_brain, 
+                     dims = 1:30, 
+                     reduction = "integrated.cca", 
+                     return.model = TRUE, 
+                     n.neighbors = 30, 
+                     n.components = 2, 
+                     metric = "cosine", 
+                     seed.use = 312, 
+                     verbose = FALSE) %>% 
+             FindNeighbors(reduction = "integrated.cca", 
+                           dims = 1:30, 
+                           k.param = 30, 
+                           nn.method = "annoy", 
+                           annoy.metric = "cosine",
+                           verbose = FALSE) %>% 
+             FindClusters(resolution = 0.6, 
+                          random.seed = 312, 
+                          algorithm = 4, 
+                          method = "igraph",
+                          verbose = FALSE) %>% 
+             FindSubCluster(cluster = "5", 
+                            graph.name = "RNA_snn", 
+                            subcluster.name = "seurat_subclusters", 
+                            resolution = 0.25, 
+                            algorithm = 4)
+seu_brain@meta.data <- mutate(seu_brain@meta.data, 
+                              seurat_clusters = as.factor(as.integer(as.factor(seurat_subclusters))))
+Idents(seu_brain) <- "seurat_clusters"
+seu_brain <- FindSubCluster(seu_brain, 
+                            cluster = "4", 
+                            graph.name = "RNA_snn", 
+                            subcluster.name = "seurat_subclusters", 
+                            resolution = 0.25, 
+                            algorithm = 4)
+seu_brain@meta.data <- mutate(seu_brain@meta.data, 
+                              seurat_clusters = as.factor(as.integer(as.factor(seurat_subclusters))))
+Idents(seu_brain) <- "seurat_clusters"
+```
+
+Our `r length(unique(seu_brain$seurat_clusters))` clusters appear to be relatively cleanly-separated on our UMAP embedding. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: UMAP embedding colored by cluster ID
+#| label: fig-umap_cluster
+p1 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
+      mutate(seurat_clusters = seu_brain$seurat_clusters) %>% 
+      ggplot(aes(x = umap_1, y = umap_2, color = seurat_clusters)) + 
+      geom_point(size = 1.5, 
+                 alpha = 0.75, 
+                 stroke = 0) + 
+      scale_color_manual(values = palette_cluster) + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           color = "Leiden Cluster") + 
+      theme_scLANE(umap = TRUE) + 
+      guides(color = guide_legend(override.aes = list(size = 4, alpha = 1, stroke = 0.25)))
+p1
+```
+
+# Analysis
+
+## Celltype annotation
+
+Using a Wilcox test, we perform a basic DE analysis in order to identify putative marker genes for each cluster. 
+
+```{r}
+seu_brain <- JoinLayers(seu_brain)
+possible_markers <- FindAllMarkers(seu_brain, 
+                                   assay = "RNA", 
+                                   logfc.threshold = 0.3, 
+                                   test.use = "wilcox", 
+                                   slot = "data", 
+                                   min.pct = 0.1, 
+                                   only.pos = TRUE, 
+                                   verbose = FALSE, 
+                                   random.seed = 312)
+top5_possible_markers <- arrange(possible_markers, p_val_adj) %>% 
+                         with_groups(cluster, 
+                                     slice_head, 
+                                     n = 5)
+```
+
+We visualize the 1op 5 markers per cluster using a dotplot. Clear expression patterns emerge - for example, expression of NK2 homeobox 2 (*NKX2-2*) is clearly specific to cluster 9. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 5
+#| fig-height: 7
+#| fig-cap: Putative marker genes for each cluster
+#| label: fig-dotplot_cluster
+p2 <- DotPlot(seu_brain, 
+              features = unique(top5_possible_markers$gene),
+              assay = "RNA", 
+              group.by = "seurat_clusters", 
+              dot.scale = 5,
+              cols = paletteer::paletteer_d("wesanderson::Zissou1")[c(1, 5)], 
+              scale.by = "radius") + 
+      coord_flip() +
+      labs(y = "Leiden Cluster") +
+      theme_scLANE() + 
+      theme(axis.title.y = element_blank(), 
+            axis.text.y = element_text(face = "italic"))
+p2
+```
+
+Based on the clustering and DE analysis, we assign celltype labels to each cluster. 
+
+::: {.callout-note}
+The celltype annotations we're assigning are mostly based on [Figs. 1-3](https://www.nature.com/articles/nature25980#Fig1) and [Extended Data Figs. 1-2 & 4](https://www.nature.com/articles/nature25980#Fig5) from [the original publication](https://doi.org/10.1038/nature25980).
+:::
+
+```{r}
+seu_brain@meta.data <- mutate(seu_brain@meta.data, 
+                              celltype = case_when(seurat_clusters == "1" ~ "Excitatory Neuron", 
+                                                   seurat_clusters == "2" ~ "Interneuron", 
+                                                   seurat_clusters == "3" ~ "Excitatory Neuron", 
+                                                   seurat_clusters == "4" ~ "Neuronal Progenitor", 
+                                                   seurat_clusters == "5" ~ "Astrocyte", 
+                                                   seurat_clusters == "6" ~ "Neuronal Progenitor", 
+                                                   seurat_clusters == "7" ~ "Microglia", 
+                                                   seurat_clusters == "8" ~ "Excitatory Neuron", 
+                                                   seurat_clusters == "9" ~ "Oligodendrocyte Progenitor", 
+                                                   TRUE ~ NA_character_), 
+                              celltype_short = case_when(seurat_clusters == "1" ~ "Exc. Neuron", 
+                                                         seurat_clusters == "2" ~ "Interneuron", 
+                                                         seurat_clusters == "3" ~ "Exc. Neuron", 
+                                                         seurat_clusters == "4" ~ "NPC", 
+                                                         seurat_clusters == "5" ~ "Astrocyte", 
+                                                         seurat_clusters == "6" ~ "NPC", 
+                                                         seurat_clusters == "7" ~ "Microglia", 
+                                                         seurat_clusters == "8" ~ "Exc. Neuron", 
+                                                         seurat_clusters == "9" ~ "OPC", 
+                                                         TRUE ~ NA_character_)) %>% 
+                              mutate(celltype_short = as.factor(celltype_short))
+```
+
+We plot our new celltype labels on our UMAP embedding. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: UMAP embedding colored by celltype
+#| label: fig-umap_celltype
+p3 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
+      mutate(celltype = seu_brain$celltype) %>% 
+      ggplot(aes(x = umap_1, y = umap_2, color = celltype)) + 
+      geom_point(size = 1.5, 
+                 alpha = 0.75, 
+                 stroke = 0) + 
+      scale_color_manual(values = palette_celltype) + 
+      labs(x = "UMAP 1", y = "UMAP 2") + 
+      theme_scLANE(umap = TRUE) + 
+      theme(legend.title = element_blank()) + 
+      guides(color = guide_legend(override.aes = list(size = 4, alpha = 1, stroke = 0.25)))
+p3
+```
+
+We re-run our DE testing between our annotated celltypes. 
+
+```{r}
+Idents(seu_brain) <- "celltype_short"
+celltype_markers <- FindAllMarkers(seu_brain, 
+                                   assay = "RNA", 
+                                   logfc.threshold = 0.3, 
+                                   test.use = "wilcox", 
+                                   slot = "data", 
+                                   min.pct = 0.1, 
+                                   only.pos = TRUE, 
+                                   verbose = FALSE, 
+                                   random.seed = 312) %>% 
+                    mutate(cluster = factor(cluster, levels = levels(seu_brain$celltype_short)))
+top5_celltype_markers <- arrange(celltype_markers, p_val_adj) %>% 
+                         with_groups(cluster, 
+                                     slice_head, 
+                                     n = 5)
+```
+
+The expression trends are clear when visualized. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 4
+#| fig-height: 6
+#| fig-cap: Putative marker genes for each celltype
+#| label: fig-dotplot_celltype
+p4 <- DotPlot(seu_brain, 
+              features = unique(top5_celltype_markers$gene),
+              assay = "RNA", 
+              group.by = "celltype_short", 
+              dot.scale = 5,
+              cols = paletteer::paletteer_d("wesanderson::Zissou1")[c(1, 5)], 
+              scale.by = "radius") + 
+      coord_flip() +
+      theme_scLANE() + 
+      theme(axis.title = element_blank(), 
+            axis.text.y = element_text(face = "italic"), 
+            axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
+p4
+```
+
+## Trajectory inference
+
+As performed by the original authors, we filter out microglial and interneuron cells. This is done because "microglia are mesoderm-derived cells and interneurons are generated in the ganglionic eminence and migrate tangentially to the PFC" i.e., they do not belong to neuronal or glial lineages we're interested in.  
+
+```{r}
+seu_brain <- seu_brain[, !seu_brain$celltype %in% c("Interneuron", "Microglia")]
+```
+
+Since we've subset the data, we now need to re-embed the cells using UMAP. 
+
+```{r}
+#| message: false
+#| warning: false
+#| results: hide
+seu_brain <- RunUMAP(seu_brain, 
+                     dims = 1:30, 
+                     reduction = "integrated.cca", 
+                     return.model = TRUE, 
+                     n.neighbors = 30, 
+                     n.components = 2, 
+                     metric = "cosine", 
+                     seed.use = 312, 
+                     verbose = FALSE)
+```
+
+We can already roughly see how the trajectory will be fit - the root population is the neuronal progenitors, with the other three celltypes being terminal cell fates. As such, we should aim to fit three lineages during trajectory estimation. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: UMAP embedding colored by filtered celltypes
+#| label: fig-umap_celltype_subset
+p5 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
+      mutate(celltype = seu_brain$celltype) %>% 
+      ggplot(aes(x = umap_1, y = umap_2, color = celltype)) + 
+      geom_point(size = 1.5, 
+                 alpha = 0.75, 
+                 stroke = 0) + 
+      scale_color_manual(values = palette_celltype) + 
+      labs(x = "UMAP 1", y = "UMAP 2") + 
+      theme_scLANE(umap = TRUE) + 
+      theme(legend.title = element_blank()) + 
+      guides(color = guide_legend(override.aes = list(size = 4, alpha = 1, stroke = 0.25)))
+p5
+```
+
+### Pseuotime estimation
+
+We'll use the `Slingshot` package to fit principal curves through our UMAP embedding & estimate lineage-specific pseudotime. 
+
+```{r}
+sling_res <- slingshot(Embeddings(seu_brain, "umap"), 
+                       clusterLabels = seu_brain$celltype, 
+                       start.clus = "Neuronal Progenitor", 
+                       end.clus = c("Astrocyte", "Oligodendrocyte Progenitor", "Excitatory Neuron"), 
+                       approx_points = 1000)
+sling_curves <- slingCurves(sling_res, as.df = TRUE)
+sling_mst <- slingMST(sling_res, as.df = TRUE)
+sling_pt <- slingPseudotime(sling_res) %>% 
+            as.data.frame() %>%
+            rowwise() %>% 
+            mutate(PT_Overall = mean(c_across(starts_with("Lineage")), na.rm = TRUE)) %>% 
+            ungroup() %>% 
+            mutate(across(c(starts_with("Lineage"), PT_Overall), 
+                          \(x) (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))))
+seu_brain <- AddMetaData(seu_brain, 
+                         metadata = sling_pt$PT_Overall, 
+                         col.name = "PT_Overall")
+```
+
+Above, we created a mean-aggregated pseudotime across all three lineages. This serves as a proxy measurement for overall developmental progression. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: UMAP embedding colored by mean-aggregated pseudotime
+#| label: fig-umap_mean_PT
+p6 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
+      mutate(PT_Overall = seu_brain$PT_Overall) %>% 
+      ggplot(aes(x = umap_1, y = umap_2, color = PT_Overall)) + 
+      geom_point(size = 1.5, 
+                 alpha = 0.75, 
+                 stroke = 0) + 
+      scale_color_gradientn(colors = palette_heatmap, labels = scales::label_number(accuracy = .01)) + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           color = "Mean Pseudotime") + 
+      theme_scLANE(umap = TRUE)
+p6
+```
+
+In general, larger pseudotime values are generated for later developmental stages.
+
+```{r}
+p7 <- data.frame(PT_Overall = sling_pt$PT_Overall, 
+                 week = seu_brain$week) %>% 
+      ggplot(aes(x = week, y = PT_Overall, color = week)) + 
+      ggbeeswarm::geom_quasirandom(size = 1.5,
+                                   alpha = 0.75, 
+                                   stroke = 0, 
+                                   show.legend = FALSE) + 
+      stat_summary(geom = "point", 
+                   fun = "mean",
+                   color =  "black", 
+                   size = 3.5) + 
+      scale_color_manual(values = palette_week) + 
+      labs(x = "Gestational Week", y = "Mean Pseudotime") +
+      theme_scLANE()
+p7
+```
+
+During pseudotime estimation `Slingshot` estimates a minimum spanning tree (MST), which serves as a rough graph abstraction of the relationships between celltypes. Our MST looks to correspond well with our exiting biological knowledge. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: UMAP embedding with MST from Slinghot overlaid
+#| label: fig-umap_MST
+p8 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
+      mutate(celltype = seu_brain$celltype) %>% 
+      ggplot(aes(x = umap_1, y = umap_2, color = celltype)) + 
+      geom_point(size = 1.5, 
+                 alpha = 0.75, 
+                 stroke = 0) + 
+      geom_path(data = sling_mst, mapping = aes(x = umap_1, y = umap_2, group = Lineage), 
+                linewidth = 1.25, 
+                color = "black") + 
+      geom_point(data = sling_mst, mapping = aes(x = umap_1, y = umap_2, fill = Cluster), 
+                color = "black", 
+                shape = 21, 
+                size = 4.5, 
+                stroke = 1.25, 
+                show.legend = FALSE) + 
+      scale_color_manual(values = palette_celltype) + 
+      scale_fill_manual(values = palette_celltype) + 
+      labs(x = "UMAP 1", y = "UMAP 2") + 
+      theme_scLANE(umap = TRUE) +  
+      theme(legend.title = element_blank()) + 
+      guides(color = guide_legend(override.aes = list(size = 4, alpha = 1, stroke = 0.25)))
+p8
+```
+
+The three lineage seem to correctly identify the developmental relationships we're looking for. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 6
+#| fig-cap: UMAP embedding colored by lineage-specific pseudotime
+#| label: fig-umap_lineage_PT
+p9 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
+      bind_cols(sling_pt) %>% 
+      tidyr::pivot_longer(starts_with("Lineage"), 
+                          names_to = "lineage", 
+                          values_to = "pseudotime") %>% 
+      ggplot(aes(x = umap_1, y = umap_2, color = pseudotime)) + 
+      facet_wrap(~lineage, nrow = 3) + 
+      geom_point(size = 1.5, 
+                 alpha = 0.75, 
+                 stroke = 0) + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           color = "Pseudotime") + 
+      scale_color_gradientn(colors = palette_heatmap, labels = scales::label_number(accuracy = .01)) + 
+      theme_scLANE(umap = TRUE)
+p9
+```
+
+As such, we add a celltype label to each lineage corresponding to each lineage's terminal cell fate.
+
+```{r}
+sling_pt_long <- data.frame(Embeddings(seu_brain, "umap")) %>% 
+                 bind_cols(sling_pt) %>% 
+                 tidyr::pivot_longer(starts_with("Lineage"), 
+                                     names_to = "lineage", 
+                                     values_to = "pseudotime") %>% 
+                 mutate(lineage_label = case_when(lineage == "Lineage1" ~ "Excitatory Neuron", 
+                                                  lineage == "Lineage2" ~ "Astrocyte", 
+                                                  lineage == "Lineage3" ~ "Oligodendrocyte Progenitor", 
+                                                  TRUE ~ NA_character_))
+```
+
+We can also plot the principal curves from `Slingshot` on our UMAP embedding. While the curves are a *little* noisy, they overall seem to recapitulate the underlying biology well. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: UMAP embedding with principal curves from Slinghot overlaid
+#| label: fig-umap_curves
+p10 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
+       mutate(celltype = seu_brain$celltype) %>% 
+       ggplot(aes(x = umap_1, y = umap_2, color = celltype)) + 
+       geom_point(size = 1.5, 
+                  alpha = 0.75, 
+                  stroke = 0) + 
+       geom_path(data = sling_curves,
+                 mapping = aes(x = umap_1, y = umap_2, group = Lineage), 
+                 color = "black", 
+                 linewidth = 1.5, 
+                 alpha = 0.75, 
+                 lineend = "round") + 
+       scale_color_manual(values = palette_celltype) + 
+       labs(x = "UMAP 1", y = "UMAP 2") + 
+       theme_scLANE(umap = TRUE) + 
+       theme(legend.title = element_blank()) + 
+       guides(color = guide_legend(override.aes = list(size = 4, alpha = 1, stroke = 0.25)))
+p10
+```
+
+### Trajectory DE testing
+
+Now that we have a pseudotime estimate for each cell across each lineage, we can perform trajectory differential expression (DE) testing using our package `scLANE`. We test only the top 3,000 HVGs, a heuristic which is motivated by the fact that the UMAP embedding was generated using just expression values from the HVG set. As such, non-HVGs don't have a direct association with pseudotime, and for simple analyses it's usually OK to refrain from testing them. 
+
+```{r}
+cell_offset <- createCellOffset(seu_brain)
+pt_df <- data.frame(PT1 = sling_pt$Lineage1, 
+                    PT2 = sling_pt$Lineage2, 
+                    PT3 = sling_pt$Lineage3)
+scLANE_models <- testDynamic(seu_brain, 
+                             pt = pt_df, 
+                             genes = VariableFeatures(seu_brain), 
+                             size.factor.offset = cell_offset, 
+                             n.cores = 6L, 
+                             verbose = TRUE)
+scLANE_de_res <- getResultsDE(scLANE_models)
+```
+
+After running the `getResultsDE()` function we now have a tidy table of differential expression statistics. 
+
+```{r}
+#| code-fold: true
+#| tbl-cap: "Sample DE test output from scLANE"
+#| label: tbl-scLANE_output
+select(scLANE_de_res, 
+       Gene, 
+       Lineage, 
+       Test_Stat, 
+       P_Val, 
+       P_Val_Adj,
+       Gene_Dynamic_Overall) %>% 
+  mutate(Lineage = case_when(Lineage == "A" ~ "Excitatory Neuron", 
+                             Lineage == "B" ~ "Astrocyte", 
+                             Lineage == "C" ~ "Oligodendrocyte Progenitor", 
+                             TRUE ~ NA_character_), 
+         Gene_Dynamic_Overall = if_else(Gene_Dynamic_Overall == 1, "Dynamic", "Static")) %>% 
+  slice_head(n = 10) %>% 
+  kableExtra::kbl(digits = 4, 
+                  booktabs = TRUE, 
+                  col.names = c("Gene", "Lineage", "LRT stat.", "P-value", "Adj. p-value", "Predicted gene status")) %>% 
+  kableExtra::kable_classic(full_width = FALSE, "hover")
+```
+
+### Gene dynamics
+
+Here we visualize the fitted dynamics and knots for three transcription factors (TFs) investigated in the original paper: SRY-box transcription factor 2 ([*SOX2*](https://doi.org/10.1016/S0896-6273(03)00497-5)), paired box 6 ([*PAX6*](https://doi.org/10.3389/fncel.2015.00070)), and oligodendrocyte transcription factor 1 ([*OLIG1*](https://doi.org/10.1523/JNEUROSCI.4962-14.2015)). All three TFs have well-annotated roles in regulating neurogenesis in humans and other species e.g., *Mus musculus*. Interestingly, while *SOX2* and *OLIG1* have markedly different dynamics and knots (transcriptional switches) across lineages, the knots chosen for *PAX6* are pretty similar for all three lineages - even though the dynamics differ. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 8
+#| fig-height: 7
+#| fig-cap: Gene dynamics for three transcription factors of interest
+#| label: fig-gene_dynamics
+p11 <- getFittedValues(scLANE_models, 
+                       genes = c("SOX2", "PAX6", "OLIG1"), 
+                       pt = pt_df, 
+                       expr.mat = seu_brain, 
+                       size.factor.offset = cell_offset, 
+                       cell.meta.data = select(seu_brain@meta.data, celltype)) %>% 
+       mutate(lineage_label = case_when(lineage == "A" ~ "Excitatory Neuron", 
+                                        lineage == "B" ~ "Astrocyte", 
+                                        lineage == "C" ~ "Oligodendrocyte Progenitor", 
+                                        TRUE ~ NA_character_)) %>% 
+       ggplot(aes(x = pt, y = rna_log1p)) + 
+       facet_grid(lineage_label~gene) + 
+       geom_point(aes(color = celltype), 
+                  size = 2, 
+                  alpha = 0.75, 
+                  stroke = 0) + 
+       geom_vline(data = data.frame(gene = scLANE_models$SOX2$Lineage_A$MARGE_Slope_Data$Gene, 
+                                    lineage_label = "Excitatory Neuron", 
+                                    knot = scLANE_models$SOX2$Lineage_A$MARGE_Slope_Data$Breakpoint), 
+                  mapping = aes(xintercept = knot), 
+                  linetype = "dashed", 
+                  color = "grey20") + 
+       geom_vline(data = data.frame(gene = scLANE_models$SOX2$Lineage_B$MARGE_Slope_Data$Gene, 
+                                    lineage_label = "Astrocyte", 
+                                    knot = scLANE_models$SOX2$Lineage_B$MARGE_Slope_Data$Breakpoint), 
+                  mapping = aes(xintercept = knot), 
+                  linetype = "dashed", 
+                  color = "grey20") + 
+       geom_vline(data = data.frame(gene = scLANE_models$SOX2$Lineage_C$MARGE_Slope_Data$Gene, 
+                                    lineage_label = "Oligodendrocyte Progenitor", 
+                                    knot = scLANE_models$SOX2$Lineage_C$MARGE_Slope_Data$Breakpoint), 
+                  mapping = aes(xintercept = knot), 
+                  linetype = "dashed", 
+                  color = "grey20") + 
+       geom_vline(data = data.frame(gene = scLANE_models$PAX6$Lineage_A$MARGE_Slope_Data$Gene, 
+                                    lineage_label = "Excitatory Neuron", 
+                                    knot = scLANE_models$PAX6$Lineage_A$MARGE_Slope_Data$Breakpoint), 
+                  mapping = aes(xintercept = knot), 
+                  linetype = "dashed", 
+                  color = "grey20") + 
+       geom_vline(data = data.frame(gene = scLANE_models$PAX6$Lineage_B$MARGE_Slope_Data$Gene, 
+                                    lineage_label = "Astrocyte", 
+                                    knot = scLANE_models$PAX6$Lineage_B$MARGE_Slope_Data$Breakpoint), 
+                  mapping = aes(xintercept = knot), 
+                  linetype = "dashed", 
+                  color = "grey20") + 
+       geom_vline(data = data.frame(gene = scLANE_models$PAX6$Lineage_C$MARGE_Slope_Data$Gene, 
+                                    lineage_label = "Oligodendrocyte Progenitor", 
+                                    knot = scLANE_models$PAX6$Lineage_C$MARGE_Slope_Data$Breakpoint), 
+                  mapping = aes(xintercept = knot), 
+                  linetype = "dashed", 
+                  color = "grey20") + 
+       geom_vline(data = data.frame(gene = scLANE_models$OLIG1$Lineage_A$MARGE_Slope_Data$Gene, 
+                                    lineage_label = "Excitatory Neuron", 
+                                    knot = scLANE_models$OLIG1$Lineage_A$MARGE_Slope_Data$Breakpoint), 
+                  mapping = aes(xintercept = knot), 
+                  linetype = "dashed", 
+                  color = "grey20") + 
+       geom_vline(data = data.frame(gene = scLANE_models$OLIG1$Lineage_B$MARGE_Slope_Data$Gene, 
+                                    lineage_label = "Astrocyte", 
+                                    knot = scLANE_models$OLIG1$Lineage_B$MARGE_Slope_Data$Breakpoint), 
+                  mapping = aes(xintercept = knot), 
+                  linetype = "dashed", 
+                  color = "grey20") + 
+       geom_vline(data = data.frame(gene = scLANE_models$OLIG1$Lineage_C$MARGE_Slope_Data$Gene, 
+                                    lineage_label = "Oligodendrocyte Progenitor", 
+                                    knot = scLANE_models$OLIG1$Lineage_C$MARGE_Slope_Data$Breakpoint), 
+                  mapping = aes(xintercept = knot), 
+                  linetype = "dashed", 
+                  color = "grey20") + 
+       geom_ribbon(aes(ymin = scLANE_ci_ll_log1p, ymax = scLANE_ci_ul_log1p), 
+                   linewidth = 0, 
+                   fill = "grey70", 
+                   alpha = 0.75) + 
+       geom_line(aes(y = scLANE_pred_log1p), 
+                 color = "black", 
+                 linewidth = 0.75) + 
+       scale_x_continuous(labels = scales::label_number(accuracy = 0.01)) + 
+       scale_color_manual(values = palette_celltype) + 
+       labs(x = "Pseudotime", 
+            y = "Normalized Expression") + 
+       theme_scLANE() + 
+       theme(legend.title = element_blank(), 
+             strip.text.x = element_text(face = "italic"), 
+             legend.position = "bottom") + 
+       guides(color = guide_legend(override.aes = list(size = 4, alpha = 1, stroke = 0.25)))
+p11
+```
+
+### Distribution of knots from `scLANE`
+
+Next, we use the `getKnostDist()` function to pull the location of every identified knot for genes dynamic across any of the three lineages. 
+
+```{r}
+dyn_genes <- filter(scLANE_de_res, Gene_Dynamic_Overall == 1) %>% 
+             distinct(Gene) %>% 
+             pull(Gene)
+knot_dist <- getKnotDist(scLANE_models, dyn.genes = dyn_genes)
+```
+
+The output of the function is rather simple:
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Sample output displaying per-gene, per-lineage knot locations in pseudotime 
+#| label: tbl-knot_dynamics
+mutate(knot_dist, 
+       lineage = case_when(lineage == "Lineage_A" ~ "Excitatory Neuron", 
+                           lineage == "Lineage_B" ~ "Astrocyte", 
+                           lineage == "Lineage_C" ~ "Oligodendrocyte Progenitor", 
+                           TRUE ~ NA_character_)) %>% 
+  slice_sample(n = 5) %>% 
+  kableExtra::kable(digits = 4, row.names = FALSE, col.names = c("Gene", "Lineage", "Knot")) %>% 
+  kableExtra::kable_classic(full_width = FALSE, "hover")
+```
+
+We can visualize the differences between lineages using a combination histogram and density plot. Interestingly, the oligodendrocyte progenitor lineage has a large number of knots just prior to ~0.75 pseudotime. This is about where the "break" in the UMAP embedding occurs (see e.g., @fig-umap_curves), hence the placement of knots there by `scLANE` makes sense.
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 6
+#| fig-cap: Empirical distribution of knots across pseudotime for each lineage
+#| label: fig-knot_dist
+p12 <- mutate(knot_dist, 
+              lineage_label = case_when(lineage == "Lineage_A" ~ "Excitatory Neuron", 
+                                        lineage == "Lineage_B" ~ "Astrocyte", 
+                                        lineage == "Lineage_C" ~ "Oligodendrocyte Progenitor", 
+                                        TRUE ~ NA_character_)) %>% 
+       ggplot(aes(x = knot)) + 
+       facet_wrap(~lineage_label, nrow = 3) + 
+       geom_histogram(aes(y = after_stat(density)), 
+                      fill = "white", color = "navy", linewidth = 0.5) + 
+       geom_density(fill = "steelblue3", color = "steelblue4", alpha = 0.5, linewidth = 0.75) + 
+       labs(x = "Knot Location", y = "Density") + 
+       theme_scLANE() + 
+       theme(axis.ticks.y = element_blank(), 
+             axis.text.y = element_blank())
+p12
+```
+
+### Gene-level embeddings
+
+After generating three lineage-specific matrices of gene dynamics using the `smoothedCountsMatrix()` function, we use `embedGenes()` to cluster the gene dynamics within each lineage and embed them in dimension-reduced space with PCA & UMAP. 
+
+```{r}
+#| message: false
+#| warning: false
+smoothed_counts <- smoothedCountsMatrix(scLANE_models, 
+                                        size.factor.offset = cell_offset, 
+                                        pt = pt_df, 
+                                        genes = dyn_genes, 
+                                        n.cores = 4L)
+gene_embed_neuron <- embedGenes(log1p(smoothed_counts$Lineage_A))
+gene_embed_astro <- embedGenes(log1p(smoothed_counts$Lineage_B))
+gene_embed_opc <- embedGenes(log1p(smoothed_counts$Lineage_C))
+```
+
+We can visualize the differing UMAP embeddings, showing heterogeneity across lineages:
+
+```{r}
+#| code-fold: true
+#| fig-width: 12
+#| fig-height: 4
+#| fig-cap: Lineage-specific embeddings of gene dynamics
+#| label: fig-gene_embeddings
+p13 <- ggplot(gene_embed_neuron, aes(x = umap1, y = umap2, color = leiden)) + 
+       geom_point(size = 2, 
+                  alpha = 0.75, 
+                  stroke = 0) + 
+       scale_color_manual(values = palette_week[1:length(unique(gene_embed_neuron$leiden))]) + 
+       labs(x = "UMAP 1",
+            y = "UMAP 2", 
+            color = "Leiden", 
+            subtitle = "Interneuron Lineage") + 
+       theme_scLANE(umap = TRUE) + 
+       guides(color = guide_legend(override.aes = list(size = 4, alpha = 1, stroke = 0.25)))
+p14 <- ggplot(gene_embed_astro, aes(x = umap1, y = umap2, color = leiden)) + 
+       geom_point(size = 2, 
+                  alpha = 0.75, 
+                  stroke = 0) + 
+       scale_color_manual(values = palette_week[-c(1:length(unique(gene_embed_neuron$leiden)))]) + 
+       labs(x = "UMAP 1", 
+            y = "UMAP 2", 
+            color = "Leiden", 
+            subtitle = "Astrocyte Lineage") + 
+       theme_scLANE(umap = TRUE) + 
+       guides(color = guide_legend(override.aes = list(size = 4, alpha = 1, stroke = 0.25)))
+p15 <- ggplot(gene_embed_opc, aes(x = umap1, y = umap2, color = leiden)) + 
+       geom_point(size = 2, 
+                  alpha = 0.75, 
+                  stroke = 0) + 
+       scale_color_manual(values = palette_week[-c(1:(length(unique(gene_embed_neuron$leiden)) + length(unique(gene_embed_astro$leiden))))]) + 
+       labs(x = "UMAP 1", 
+            y = "UMAP 2", 
+            color = "Leiden", 
+            subtitle = "Oligodendrocyte Progenitor Lineage") + 
+       theme_scLANE(umap = TRUE) + 
+       guides(color = guide_legend(override.aes = list(size = 4, alpha = 1, stroke = 0.25)))
+p16 <- p13 + p14 + p15
+p16
+```
+
+### Gene set enrichment analysis
+
+Lastly, we can compare the dynamic gene sets for each lineage by performing enrichment analysis on each. The `enrichDynamicGenes()` function does this using the `gprofiler2` package internally. 
+
+```{r}
+enrich_neuron <- enrichDynamicGenes(scLANE_de_res, lineage = "A")
+enrich_astro <- enrichDynamicGenes(scLANE_de_res, lineage = "B")
+enrich_opc <- enrichDynamicGenes(scLANE_de_res, lineage = "C")
+```
+
+Examining the top biological processes enriched in each lineage gives us some idea as to what each dynamic gene set is doing. For example, the interneuron lineage is correctly characterized by terms related to neurogenesis & neuronal differentiation. 
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Top 5 GO:BP terms for the dynamic genes from each lineage
+#| label: tbl-top5_go_terms
+top5_terms <- filter(enrich_neuron$result, source == "GO:BP") %>% 
+              mutate(lineage = "Interneuron", .before = 1) %>% 
+              bind_rows((filter(enrich_astro$result, source == "GO:BP") %>% 
+                         mutate(lineage = "Astrocyte", .before = 1))) %>% 
+              bind_rows((filter(enrich_opc$result, source == "GO:BP") %>% 
+                         mutate(lineage = "Oligodendrocyte Progenitor", .before = 1))) %>% 
+              select(lineage, term_name, p_value) %>% 
+              arrange(p_value) %>% 
+              with_groups(lineage, 
+                          slice_head, 
+                          n = 5)
+kableExtra::kable(top5_terms, digits = 3, row.names = FALSE, col.names = c("Lineage", "Term", "P-value")) %>% 
+  kableExtra::kable_classic(full_width = FALSE, "hover")
+```
+
+We can also identify sets of terms specific to each lineage; here we do so for the oligodendrocyte lineage. 
+
+```{r}
+spec_terms_opc <- filter(enrich_opc$result, source == "GO:BP", 
+                         !term_id %in% (filter(enrich_neuron$result, p_value < 0.05) %>% pull(term_id)), 
+                         !term_id %in% (filter(enrich_astro$result, p_value < 0.05) %>% pull(term_id)), 
+                         p_value < 0.05) %>% 
+                  mutate(lineage = "Oligodendrocyte Progenitor", .before = 1)
+```
+
+We see several terms significantly enriched in the lineage that are specific to OPC development. This serves as confirmatory evidence that our trajectory was fit correctly and that our trajectory DE results are biologically meaningful. 
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Significantly enriched OPC-related biological process
+#| label: tbl-opc_go_terms
+filter(spec_terms_opc, grepl("oligodendrocyte", term_name)) %>% 
+  select(lineage, term_name, p_value) %>% 
+  kableExtra::kable(digits = 3, row.names = FALSE, col.names = c("Lineage", "Term", "P-value")) %>% 
+  kableExtra::kable_classic(full_width = FALSE, "hover")
+```
+
+# Conclusions
+
+Here we showcased an end-to-end trajectory analysis, from initial celltype annotation to trajectory inference. After fitting a trajectory with `Slingshot` in a supervised manner using existing biological knowledge, we performed trajectory differential expression testing with `scLANE`. This opened up several downstream analysis options, including the comparison of gene dynamics across lineages, the inspection of the locations of transcriptional switches, and lineage-specific trajectory enrichment analysis. In doing so, we both recapitulated points from the original authors' analysis (e.g., visualizing dynamics of relevant transcription factors) and added to them (e.g., performing trajectory enrichment analysis). For more information on `scLANE`, see the corresponding [preprint](https://doi.org/10.1101/2023.12.19.572477) or the [GitHub repository](https://github.com/jr-leary7/scLANE). 
+
+# Session info
+
+```{r}
+sessioninfo::session_info()
+```

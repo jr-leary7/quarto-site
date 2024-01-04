@@ -40,5 +40,8 @@
   },
   "tutorials/Integration_Tutorial.qmd": {
     "Integration_Tutorial.html": "b1e95215"
+  },
+  "tutorials/Neurogenesis_with_scLANE.qmd": {
+    "Neurogenesis_with_scLANE.html": "609f752c"
   }
 }
