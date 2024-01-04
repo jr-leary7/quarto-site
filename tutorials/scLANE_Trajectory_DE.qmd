@@ -661,7 +661,7 @@ enrich_res <- gprofiler2::gost(gene_clust_list,
                                significant = TRUE)
 ```
 
-A look at the top 3 most-significant GO terms for each gene cluster reveals heterogeneous functionalities across groups of genes.
+A look at the top 5 most-significant GO terms for each gene cluster reveals heterogeneous functionalities across groups of genes.
 
 ```{r}
 #| tbl-cap: Top 5 biological process GO terms per cluster
@@ -748,7 +748,8 @@ Next, in order to identify which genes are "drivers" of a certain gene program, 
 ```{r}
 program_drivers <- geneProgramDrivers(seu, 
                                       genes = gene_embed$gene, 
-                                      gene.program = seu$peptide_production)
+                                      gene.program = seu$peptide_production, 
+                                      verbose = FALSE)
 ```
 
 We display the top 10 most-correlated genes here. For example, retinol-binding protein 4 (*Rbp4*) is a known marker of pancreatic islet cells, and of delta cells more specifically ([source](https://doi.org/10.1038/s42255-023-00876-x)).
