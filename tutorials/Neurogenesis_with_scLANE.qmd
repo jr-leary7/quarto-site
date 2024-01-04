@@ -555,7 +555,7 @@ scLANE_models <- testDynamic(seu_brain,
                              genes = VariableFeatures(seu_brain), 
                              size.factor.offset = cell_offset, 
                              n.cores = 6L, 
-                             verbose = TRUE)
+                             verbose = FALSE)
 scLANE_de_res <- getResultsDE(scLANE_models)
 ```
 
@@ -714,6 +714,7 @@ We can visualize the differences between lineages using a combination histogram 
 
 ```{r}
 #| code-fold: true
+#| message: false
 #| fig-width: 6
 #| fig-height: 6
 #| fig-cap: Empirical distribution of knots across pseudotime for each lineage
