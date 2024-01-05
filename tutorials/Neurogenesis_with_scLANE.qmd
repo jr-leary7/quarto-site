@@ -209,7 +209,7 @@ top5_possible_markers <- arrange(possible_markers, p_val_adj) %>%
                                      n = 5)
 ```
 
-We visualize the 1op 5 markers per cluster using a dotplot. Clear expression patterns emerge - for example, expression of NK2 homeobox 2 (*NKX2-2*) is clearly specific to cluster 9. 
+We visualize the top 5 markers per cluster using a dotplot. Clear expression patterns emerge - for example, expression of NK2 homeobox 2 (*NKX2-2*) is clearly specific to cluster 9. 
 
 ```{r}
 #| code-fold: true
