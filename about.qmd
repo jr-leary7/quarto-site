@@ -33,3 +33,7 @@ Outside of research, I enjoy reading (my favorite genres are nautical adventure,
 1. **Jack R. Leary**, Yi Xu, Ashley Morrison, Chong Jin, Emily C. Shen, Ye Su, Naim U. Rashid, Jen Jen Yeh, Xianlu Laura Peng. [Sub-cluster identification through semi-supervised optimization of rare-cell silhouettes (SCISSORS) in single-cell sequencing](https://doi.org/10.1093/bioinformatics/btad449). *Bioinformatics* (2023). 
 
 2. Matthew E. Berginski, Madison R. Jenner, Chinmaya U. Joisa, Silvia G.Herrera Loeza, Brian T. Golitz, Matthew B. Lipner, **Jack R. Leary**, Naim U. Rashid, Gary L. Johnson, Jen Jen Yeh, Shawn M. Gomez. [Kinome state is predictive of cell viability in pancreatic cancer tumor and stroma cell lines](https://doi.org/10.1101/2021.07.21.451515). *BioRxiv* (2021). 
+
+3. **Jack R. Leary**, Rhonda Bacher. [Interpretable trajectory inference with single-cell Linear Adaptive Negative-binomial Expression (scLANE) testing](https://doi.org/10.1101/2023.12.19.572477). *BioRxiv* (2023). 
+
+4. Xiaoru Dong, **Jack R. Leary**, Chuanhao Yang, Maigan A. Brusko, Todd M. Brusko, Rhonda Bacher. [Data-driven selection of analysis decisions in single-cell RNA-seq trajectory inference](https://doi.org/10.1101/2023.12.18.572214). *BioRxiv* (2023). 
