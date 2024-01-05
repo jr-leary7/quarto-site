@@ -424,6 +424,11 @@ p6
 In general, larger pseudotime values are generated for later developmental stages.
 
 ```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: Beeswarm plots of the distribution of mean-aggregated pseudotime for each gestational week
+#| label: fig-beeswarm_pt
 p7 <- data.frame(PT_Overall = sling_pt$PT_Overall, 
                  week = seu_brain$week) %>% 
       ggplot(aes(x = week, y = PT_Overall, color = week)) + 
