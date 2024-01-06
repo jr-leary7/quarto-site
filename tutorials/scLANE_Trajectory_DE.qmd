@@ -31,7 +31,7 @@ execute:
 
 ```{r setup}
 #| include: false
-knitr::opts_chunk$set(fig.width = 9, fig.height = 6, comment = NA)
+knitr::opts_chunk$set(comment = NA)
 reticulate::use_virtualenv("~/Desktop/PhD/Research/Python_Envs/personal_site/", required = TRUE)
 set.seed(312)
 ```
@@ -313,16 +313,17 @@ scLANE_models <- testDynamic(seu,
                              pt = sling_pt, 
                              genes = top3k_hvg, 
                              size.factor.offset = cell_offset, 
-                             n.cores = 5, 
+                             n.cores = 6L, 
                              verbose = FALSE)
+scLANE_res_tidy <- getResultsDE(scLANE_models)
 ```
 
 After tidying the TDE results with `getResultsDE()`, we pull a sample of 6 genes from the results & display their test statistics. By default, any gene with an adjusted *p*-value less than 0.01 is predicted to be dynamic, though this threshold can be easily adjusted. 
 
 ```{r}
+#| code-fold: true
 #| tbl-cap: TDE test results from scLANE
 #| label: tbl-scLANE_res
-scLANE_res_tidy <- getResultsDE(scLANE_models)
 select(scLANE_res_tidy, 
        Gene, 
        Test_Stat, 
@@ -641,7 +642,7 @@ Heatmap(matrix = heatmap_mat,
         raster_quality = 5)
 ```
 
-## Enrichment analysis & gene programs
+## Gene programs
 
 Using our gene clusters & the `gprofiler2` package, we run an enrichment analysis against [the biological process (BP) set of gene ontologies](http://geneontology.org/docs/ontology-documentation/). We make sure to order the genes in each cluster by their test statistics by joining to the results table from `scLANE`. 
 
@@ -664,6 +665,7 @@ enrich_res <- gprofiler2::gost(gene_clust_list,
 A look at the top 5 most-significant GO terms for each gene cluster reveals heterogeneous functionalities across groups of genes.
 
 ```{r}
+#| code-fold: true
 #| tbl-cap: Top 5 biological process GO terms per cluster
 #| label: tbl-go_bp
 mutate(enrich_res$result, 
@@ -755,6 +757,7 @@ program_drivers <- geneProgramDrivers(seu,
 We display the top 10 most-correlated genes here. For example, retinol-binding protein 4 (*Rbp4*) is a known marker of pancreatic islet cells, and of delta cells more specifically ([source](https://doi.org/10.1038/s42255-023-00876-x)).
 
 ```{r}
+#| code-fold: true
 #| tbl-cap: Top 10 driver genes for the peptide production gene program
 #| label: tbl-driver_genes
 slice_head(program_drivers, n = 10) %>% 
@@ -790,6 +793,60 @@ p16 <- data.frame(celltype = seu$celltype,
        theme_scLANE() + 
        theme(axis.title.x = element_blank())
 p16
+```
+
+Finally, we can use additive models to estimate the statistical significance of each gene program's enrichment across the trajectory. 
+
+```{r}
+prog_signif <- geneProgramSignificance(list(seu$peptide_production, 
+                                            seu$cell_cycle, 
+                                            seu$differentiation, 
+                                            seu$regulation_of_organogenesis), 
+                                       pt = sling_pt$PT, 
+                                       program.labels = c("Peptide production", 
+                                                          "Cell cycle", 
+                                                          "Differentiation", 
+                                                          "Organogenesis"))
+```
+
+All four gene programs appear to be significantlty associated with pseudotime. 
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Significance testing for gene programs across the trajectory
+#| label: tbl-prog_signif
+kableExtra::kbl(prog_signif, 
+                digits = 4, 
+                booktabs = TRUE, 
+                row.names = FALSE,
+                col.names = c("Program", "LRT Statistic", "DF", "P-value", "Adj. P-value")) %>% 
+  kableExtra::kable_classic(c("hover"), full_width = FALSE)
+```
+
+## Dynamic gene enrichment
+
+Lastly, we perform an enrichment analysis for our set of dynamic genes. We'll focus on terms from the GO biological process (BP) set, as those are generally the easiest to interpret. 
+
+```{r}
+dyn_gene_enrich <- enrichDynamicGenes(scLANE_res_tidy, species = "Mmusculus")
+dyn_go_bp_terms <- filter(dyn_gene_enrich$result, 
+                          source == "GO:BP", 
+                          p_value < 0.05)
+```
+
+Overall, there are `r length(unique(dyn_go_bp_terms$term_id))` unique significantly-enriched GO:BP terms for our trajectory. 
+
+```{r}
+#| code-fold: true
+#| tbl-cap: Random sample of the biological processes enriched for the dynamic gene set
+#| label: tbl-bp_terms
+select(dyn_go_bp_terms, term_name, p_value, source) %>% 
+  slice_sample(n = 10) %>% 
+  kableExtra::kbl(digits = 3, 
+                  booktabs = TRUE, 
+                  row.names = FALSE,
+                  col.names = c("Term", "P-value", "Source")) %>% 
+  kableExtra::kable_classic(c("hover"), full_width = FALSE)
 ```
 
 # Conclusions
