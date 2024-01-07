@@ -56,6 +56,6 @@ website:
 format:
   html:
     theme:
-      light: flatly
+      light: minty
       dark: darkly
     toc: true
