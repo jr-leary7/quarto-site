@@ -43,5 +43,8 @@
   },
   "tutorials/Neurogenesis_with_scLANE.qmd": {
     "Neurogenesis_with_scLANE.html": "609f752c"
+  },
+  "knowledge_base/scholarly_writing.qmd": {
+    "scholarly_writing.html": "a0bc8924"
   }
 }
