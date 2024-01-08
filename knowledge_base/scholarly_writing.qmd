@@ -1,0 +1,132 @@
+---
+title: "A Reproducibility-focused Workflow for Writing Scholarly Articles"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  orcid: 0009-0004-8821-3269
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: today
+date-format: long
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    fig-format: retina
+    fig-width: 9
+    fig-height: 6
+    df-print: kable
+    link-external-newwindow: true
+execute:
+  cache: false
+  freeze: auto
+---
+
+# Introduction
+
+Scholarly writing can be a difficult, complex, and occasionally expensive process.It's hard enough to simply get ideas on paper in a coherent manner - much less do so while adhering to journal formatting requirements, keeping track of references, and ensuring the reproducibility of your results. Collaboration with other authors introduces a whole host of other issues including version control, tracking reviewer comments, and differences in preferred writing tools. The purpose of this writeup is to lay out some thoughts on how to best address some of these issues in a way that focuses on reproducibility and ease of collaboration. No single tool is able to ameliorate very concern, but this workflow has - for the most part - worked well for me as of late. In general, the options fall along two axes: reproducibility and ease of use / collaboration. The goal is to find an appropriate (which is, to be fair, highly subjective) balance between the two. Lastly, we'll place a small amount of importance on the aesthetics of the final output. Some would posit that this should not be a primary concern, and that view does have some merit. I am guilty of spending too much time on making figures pretty, etc. (just ask [my advisor](https://www.rhondabacher.com)), but to some degree the aesthetic properties of the final paper do matter. People pay more attention to well-formatted, visually attractive figures and text, thus if the goal of each paper is in part to reach a wide audience the final product should be aesthetically pleasing. Anyways, off we go.
+
+# Text editors & output formats
+
+## Microsoft Word
+
+The classic and most widely-used option here is of course Microsoft Word. Word is high up on the ease of use axis, and low on the reproducibility axis.
+
+**Pros**: per-collaborator change tracking is possible, it integrates with several citation managers, and pretty much everyone has it installed on their computer regardless of what operating system they use. In addition, along with PDFs Word documents are what journals usually accept for initial & final submissions.
+
+**Cons**: figure and table placement around text can be a huge pain, citation integration is slow, and since it's impossible to check Word docs into GitHub you usually end up with dozens of different manuscript versions floating around across various machines. in addition, once figures, references, and dozens of pages of text have been placed in the document the app tends to slow to a crawl, which makes writing and editing painful.
+
+I understand why researchers use Word, I really do. In terms of setup it has the lowest barrier to entry and it tends to be the easiest way to get multiple authors collaborating on the same manuscript. In addition, you can pretty easily convert your Word doc to PDF using Adobe Acrobat if that's what the journal you're submitting to requires. *However*, it does, in my opinion, come with some pretty significant drawbacks. If you need to reformat for a journal submission you must do so manually, which is time-consuming and might affect the placement of your figures & tables. In addition, the equation editor is an absolute nightmare to use compared to writing equations in LaTeX.
+
+## Quarto
+
+The successor to the widely-popular RMarkdown, [Quarto](https://quarto.org) is a Pandoc-based, fully-featured technical writing suite that allows for code execution, automatic figure placement, Markdown & LaTeX usage, and more. I've been using Quarto for over a year now, and while there have been some growing pains (as there are with any new software), in general I have vastly enjoyed the experience and prefer it to RMarkdown.
+
+**Pros**: you can compile to multiple output formats simultaneously, including code is quite simple, and it's possible to use GitHub, GitLab, etc. to version-control your document - which makes collaboration a bit easier. In addition, Zotero support is included, and the output of each format is quite visually appealing & customizeable. Quarto supports a wide variety of document types, including [articles](https://quarto.org/docs/authoring/markdown-basics.html) (Word, PDF, HTML), [websites](https://quarto.org/docs/websites/) such as this one, [presentations](https://quarto.org/docs/presentations/) (PowerPoint, Beamer, RevealJS), [books](https://quarto.org/docs/books/), and as of v1.4 [web-based manuscripts](https://quarto.org/docs/manuscripts/). In addition, the framework is agnostic with respect to the type of software used to edit the text. I use [VS Code](https://quarto.org/docs/tools/vscode.html), but other options include [RStudio](https://quarto.org/docs/tools/rstudio.html) and [JupyterLab](https://quarto.org/docs/tools/jupyter-lab.html). Finally, since Pandoc is used under the hood, figure, table, algorithm, etc. placement is handled algorithmically, which makes adding or deleting non-text content super simple.
+
+**Cons**: collaboration can be a bit tricky. This is, in my opinion, the main drawback. Non-technical collaborators almost certainly don't have Quarto installed, and even some technical colleagues might not have made the switch from RMarkdown. The other primary pain point I've run into is that tracking word-level changes isn't really possible unless you feel up to going through git commits to see who changed what. In that respect specifically, Word is a much better option for editing and reviewing your manuscript. A solution to this I've used lately is to write the first couple versions using Quarto in VS Code, then use a Word doc to perform the final edits and changes with my advisor / coauthors. This isn't a perfect option, but it does allow you to mostly maintain the formatting advantages offered by Quarto.
+
+## Command line editors & LaTeX
+
+Lastly, there will always a subset of scientists who have a highly-customized installation of [Vim](https://www.vim.org), [Neovim](https://neovim.io), [Emacs](https://www.gnu.org/software/emacs/), or some other command line text editor that they cling to. They tend to prefer to write their manuscripts in LaTeX and later compile to PDF or Word using a tool like [Pandoc](https://pandoc.org) (if the journal doesn't allow LaTeX submissions). This is the most customizeable writing approach, and is also the hardest to use.
+
+**Pros**: most of the aforementioned text editors have various plugins to make writing LaTeX documents easier, the IDEs are lightweight, and it's easy to version-control a text document by checking it into git. Citations are supported via [BibTex](https://www.bibtex.org) or something else like it.
+
+**Cons**: almost no one else wants to write an entire manuscript in a text editor, and non-technical collaborators will almost certainly balk at a LaTeX-only approach. Tangentially, LaTeX has a very steep learning curve; it's incredibly versatile and the results are usually quite aesthetically pleasing, but learning it is much harder than opening Word or using Markdown.
+
+# Figures
+
+In a perfect world, it would be possible to have your figure generation code embedded into your source document, thus providing the ability to reproduce your figures every time the document's output is compiled. In reality, this complicates your writing workflow quite a bit unless your document is relatively short & simple. It also requires that authors use a programmatic writing environment like Quarto or RMarkdown, which not everyone is willing to do. Lastly, it's not possible to make every type of figure using R or Python; sometimes manual intervention or editing is required.
+
+## Programmatic solutions
+
+As far as programming languages go, R is my primary choice for graphics creation. [`ggplot2`](https://ggplot2.tidyverse.org) is an incredibly rich library and can make pretty much any type of plot you need - except for RNA velocity streamline plots, which I have tried and failed to make work several times (irksome). I use `ggplot2` to create the individual figure components, and as needed I combine them using the wonderful [`patchwork`](https://patchwork.data-imaginist.com) package. `patchwork` uses an arithmetical syntax to arrange figures, and in my opinion is much easier to use than alternatives such as `cowplot` or `gridExtra`.
+
+Some scientists prefer to work in Python, and for those of us that do [`matplotlib`](https://matplotlib.org) is king. A slightly more user-friendly `matplotlib`-based alternative is [`seaborn`](https://seaborn.pydata.org), which makes creating basic figures simpler but lacks the extensibility of `matplotlib`. While `ggplot2` makes it easier to create most types of figure, `matplotlib` allows for super granular control over each plot element in a way that is often difficult with `ggplot2`. It also includes built-in functionality for arranging multiple subfigures which is nice.
+
+The main positive aspect of using programmatic solutions is that they are much more reproducible: you simply save the code you used to generate a figure, then re-run it if necessary. In addition, code & date are shareable via platforms like [Zenodo](https://zenodo.org), which is starting to become a more widespread requirement for publication. Lastly, if you use a scientific writing system like Quarto or JupyterLab, you can embed the figure-generation code in your document - the ultimate form of reproducibility.
+
+The downsides are that some figures just require manual editing in a GUI-based software e.g., adding text in between subfigures or drawing arrows within a plot. Also, not all collaborators are capable of reading or writing figure-generating code, which can hamper collaboration.
+
+## Adobe products
+
+The main alternative (or perhaps extension) to programmatic approaches are GUI softwares such as Photoshop, InDesign, and Illustrator. Obviously some programmatic aspect is required to process the data and plot it, but these programs can be extraordinarily helpful when it comes to downstream processing. Specifically, adding text and other annotations and aligning multiple subfigures are both generally easier when using a point-and-click software. The downsides are mainly that GUI workflows are not reproducible or shareable, and manipulating figure post-hoc must be re-done every time you need to change a figure.
+
+# Citations
+
+The two main options here, in my experience, are [Zotero](https://www.zotero.org) and [EndNote](https://endnote.com). The two products are fairly similar, with the primary difference being that Zotero is (mostly) free and EndNote is \$180 per year - if you're a student, otherwise it's around \$325. If your college or department offers a subscription to EndNote it's a great product to have, but otherwise it's a little pricey, especially for PhD students. Zotero on the other hand is free, with costs only being incurred if you need to buy more cloud storage to save your library online. I pay something around \$20 a year for 2GB of storage, which is more than enough for my needs and allows me to access my library of PDFs anywhere I go.
+
+Both programs integrate with Word, with the EndNote plugin being a little faster and easier to use. If you're using Quarto or RMarkdown, only Zotero is supported. For JupyterLab citations aren't supported by default, but [this extension](https://github.com/krassowski/jupyterlab-citation-manager) adds Zotero integration. In summary, I would recommend Zotero unless someone else is paying for it since the longterm costs are much lower and the products are highly similar.
+
+# My workflow
+
+Here's a general schema for how I write manuscripts:
+
+```{mermaid}
+flowchart TD
+  A(Write text in Quarto document in VS Code)
+  B(Data analysis in R & Python)
+  C(Generate figures in R)
+  D(Manage bibliography with Zotero)
+  E(Compile to PDF & Word output with Quarto/Pandoc)
+  F(Edit Word doc with my advisor)
+  G(Integrate edits into original Quarto document)
+  H(Compile & submit final Word doc or PDF)
+  A --> E
+  B --> C
+  C --> E
+  D --> E
+  E --> F
+  F --> G
+  G --> E
+  G --> H
+```
+
+# Concluding thoughts
+
+Writing manuscripts is a time-consuming and highly technical process that involves collating code, data, figures, text, and references into a single document with a cohesive narrative structure. This can be a monumental task, and choosing the right software to perform the separate tasks can be a challenge. Since most of my projects involve a smaller amount of collaborators (my [most recent preprint](https://doi.org/10.1101/2023.12.19.572477) was just myself and my advisor) I have a bit of latitude when it comes to how I write. While my advisor would probably prefer that I work more in Word docs for the sake of change-tracking and collaboration, I really do love Quarto's ease of use and the aesthetics of its output. The following (in some order) are the main reasons why:
+
+1.  Ability to compile to HTML, PDF, and Word simultaneously
+
+2.  Ease of inline and display equation writing via LaTeX
+
+3.  Simple integration with Zotero for references and bibliography formatting
+
+4.  Algorithmic optimal placement of figures, tables, and other non-text content
+
+5.  Execution of R & Python code within a document
+
+6.  Ability to use raw LaTeX code to generate algorithm descriptions, tables, etc. when compiling to PDF
+
+7.  Ability to cross-reference figures, tables, equations, references, etc. in-text with clickable links
+
+8.  Official Quarto and community-led support for journal theme templates (see e.g., [this repository](https://github.com/quarto-journals))
+
+Overall, these features make Quarto + VS Code the best option for me at this time, though I'll continue to compile to Word docs so that my advisor & I can track each others edits. My hope is that at some point Quarto or Pandoc will introduce a change-tracking feature (see e.g., [this Pandoc GitHub issue](https://github.com/jgm/pandoc/issues/2374) and [this Quarto-based workaround](https://openplantpathology.org/posts/2022-08-18-tracking-changes-from-rmdqmd-output-across-word-document-versions/)); that alone would greatly improve the collaboration aspect of my current workflow. In the meantime, it looks like Word is still the best option for collaboratively editing manuscripts with both technical and non-technical co-authors. 
