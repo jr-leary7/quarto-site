@@ -24,6 +24,7 @@ format:
     fig-height: 6
     df-print: kable
     link-external-newwindow: true
+    tbl-cap-location: bottom
 execute:
   cache: false
   freeze: auto

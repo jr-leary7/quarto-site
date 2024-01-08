@@ -24,6 +24,7 @@ format:
     fig-height: 6
     df-print: kable
     link-external-newwindow: true
+    tbl-cap-location: bottom
 execute:
   cache: false
   freeze: auto
@@ -119,7 +120,7 @@ seu_brain <- IntegrateLayers(seu_brain,
                              verbose = FALSE)
 ```
 
-We perform dimension reduction with UMAP, embed the cells in a shared nearest-neighbor (SNN) graph, and partition the graph into clusters via the Louvain algorithm. We also identify subclusters in two of the larger main clusters. 
+We perform dimension reduction with UMAP, embed the cells in a shared nearest-neighbor (SNN) graph, and partition the graph into clusters via the Leiden algorithm. We also identify subclusters in two of the larger main clusters. 
 
 ```{r}
 #| message: false
