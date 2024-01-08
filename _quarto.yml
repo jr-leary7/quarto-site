@@ -52,7 +52,7 @@ website:
         menu: 
           - knowledge_base/scRNAseq.qmd
           - knowledge_base/R_Development.qmd
-          - scholarly_writing.qmd
+          - knowledge_base/scholarly_writing.qmd
 
 format:
   html:
