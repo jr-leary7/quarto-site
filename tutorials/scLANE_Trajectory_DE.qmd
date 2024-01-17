@@ -25,6 +25,7 @@ format:
     df-print: kable
     link-external-newwindow: true
     tbl-cap-location: bottom
+    number-sections: true
 execute:
   cache: false
   freeze: auto
@@ -37,11 +38,11 @@ reticulate::use_virtualenv("~/Desktop/PhD/Research/Python_Envs/personal_site/", 
 set.seed(312)
 ```
 
-# Introduction 
+# Introduction {#sec-intro}
 
-In this tutorial we'll walk through a basic trajectory differential expression analysis. We'll use the `scLANE` R package, which we developed with the goal of providing accurate and biologically interpretable models of expression over pseudotime. At the end are some best-practices recommendations, along with a short list of references we used in developing the method & writing the accompanying manuscript. 
+In this tutorial we'll walk through a basic trajectory differential expression analysis. We'll use the `scLANE` R package, which we developed with the goal of providing accurate and biologically interpretable models of expression over pseudotime. At the end are some best-practices recommendations, along with a short list of references we used in developing the method & writing the accompanying manuscript. If you want to skip the preprocessing steps and get right into the analysis, head to @sec-traj. 
 
-# Libraries 
+# Libraries {#sec-libs} 
 
 If you haven't already, install the development version (currently v`r packageVersion("scLANE")`) of `scLANE` from [the GitHub repository](https://github.com/jr-leary7/scLANE).
 
@@ -67,7 +68,7 @@ library(ComplexHeatmap)  # heatmaps
 rename <- dplyr::rename
 ```
 
-# Helper Functions 
+# Helper Functions {#sec-fns}
 
 We'll also define a couple utilities to make our plots cleaner to read & easier to make. 
 
@@ -91,7 +92,7 @@ palette_celltype <- paletteer::paletteer_d("ggsci::category20_d3")
 palette_heatmap <- paletteer::paletteer_d("wesanderson::Zissou1")
 ```
 
-# Data 
+# Data {#sec-data}
 
 We'll load the well-known pancreatic endocrinogenesis data from [Bastidas-Ponce *et al* (2019)](https://doi.org/10.1242/dev.173849), which comes with the `scVelo` Python library & has been used in several pseudotime inference / RNA velocity method papers as a good benchmark dataset due to the simplicity of the underlying trajectory manifold. 
 
@@ -109,7 +110,7 @@ adata
 
 ## Conversion from Python
 
-The `reticulate` package allows us to pass the counts matrices & metadata from Python back to R. We'll use the spliced mRNA counts as our default assay, and also define a new assay containing the total (spliced + unspliced) mRNA in each cell. Lastly, we remove genes with non-zero spliced mRNA in 3 or fewer cells. 
+The `reticulate` package allows us to pass the counts matrices & metadata from Python back to R. 
 
 ```{python}
 spliced_counts = adata.layers['spliced'].toarray()
@@ -119,6 +120,8 @@ unspliced_counts = adata.layers['unspliced'].toarray()
 ::: {.callout-note}
 While downloading this dataset requires a Python installation as well as the installation of the `scVelo` Python library (and its dependencies), running `scLANE` is done purely in R & requires no Python whatsoever. 
 :::
+
+We'll use the spliced mRNA counts as our default assay, and also define a new assay containing the total (spliced + unspliced) mRNA in each cell. Lastly, we remove genes with non-zero spliced mRNA in 3 or fewer cells. 
 
 ```{r}
 spliced_counts <- Matrix::Matrix(t(py$spliced_counts), sparse = TRUE)
@@ -133,15 +136,16 @@ unspliced_assay@key <- "unspliced_"
 rna_assay <- CreateAssayObject(counts = rna_counts)
 rna_assay@key <- "rna_"
 meta_data <- py$adata$obs %>% 
-             mutate(cell_name = rownames(.), .before = 1) %>% 
+             mutate(cell_name = rownames(.), 
+                    .before = 1) %>% 
              rename(celltype = clusters, 
                     celltype_coarse = clusters_coarse) %>% 
              mutate(nCount_spliced = colSums(spliced_counts), 
                     nFeature_spliced = colSums(spliced_counts > 0), 
                     nCount_unspliced = colSums(unspliced_counts), 
                     nFeature_unspliced = colSums(unspliced_counts > 0), 
-                    nCount_rna = colSums(rna_counts), 
-                    nFeature_rna = colSums(rna_counts > 0))
+                    nCount_RNA = colSums(rna_counts), 
+                    nFeature_RNA = colSums(rna_counts > 0))
 seu <- CreateSeuratObject(counts = spliced_assay, 
                           assay = "spliced", 
                           project = "Mm_Panc_Endo", 
@@ -250,7 +254,7 @@ p2 <- (p0 / p1) +
 p2
 ```
 
-# Trajectory Inference 
+# Trajectory Inference {#sec-traj}
 
 ## Pseudotime Estimation
 
@@ -341,7 +345,7 @@ select(scLANE_res_tidy,
   kableExtra::kable_classic(full_width = FALSE, "hover")
 ```
 
-Next, we can use the `plotModels()` function to visualize the fitted models from `scLANE` and compare them to other modeling methods. The gene [*Neurog3*](https://www.ncbi.nlm.nih.gov/gene/11925) is strongly associated with epithelial cell differentiation, and indeed we see a clear, nonlinear transcriptional dynamic across pseudotime for that gene. A traditional GLM fails to capture that nonlinearity, and while a GAM fits the trend smoothly, it seems to overfit the dynamics near the boundaries of pseudotime - [a known issue with additive models](https://www.routledge.com/Generalized-Additive-Models-An-Introduction-with-R-Second-Edition/Wood/p/book/9781498728331). Only the `scLANE` model accurately models the rapid upregulation and equally swift downregulation of *Neurog3* over pseudotime, in addition to identifying the cutpoint in pseudotime at which downregulation begins. 
+Next, we can use the `plotModels()` function to visualize the fitted models from `scLANE` and compare them to other modeling methods. The gene [*Neurog3*](https://www.ncbi.nlm.nih.gov/gene/11925) is strongly associated with epithelial cell differentiation, and indeed we see a clear, nonlinear transcriptional dynamic across pseudotime for that gene. A traditional GLM fails to capture that nonlinearity, and while a GAM fits the trend smoothly, it seems to overfit the dynamics near the boundaries of pseudotime - [a known issue with additive models](https://www.routledge.com/Generalized-Additive-Models-An-Introduction-with-R-Second-Edition/Wood/p/book/9781498728331). Only the `scLANE` model accurately models the rapid upregulation and equally swift downregulation of the transcription factor neurogenin-3 (*Neurog3*) over pseudotime, in addition to identifying the cutpoint in pseudotime at which downregulation begins. 
 
 ```{r}
 #| code-fold: true
@@ -360,7 +364,7 @@ p5 <- plotModels(scLANE_models,
 p5
 ```
 
-# Downstream analysis 
+# Downstream analysis {#sec-analysis}
 
 ## Gene dynamics plots
 
@@ -548,7 +552,9 @@ First we'll visualize the gene clusters on the first two PCs.
 #| fig-cap: Unsupervised clustering of genes in PCA space
 #| label: fig-gene_pca
 p11 <- ggplot(gene_embed, aes(x = pc1, y = pc2, color = leiden)) + 
-       geom_point(size = 2, alpha = 0.75, stroke = 0) + 
+       geom_point(size = 2, 
+                  alpha = 0.75, 
+                  stroke = 0) + 
        labs(x = "PC 1", 
             y = "PC 2", 
             color = "Leiden Cluster") +
@@ -566,7 +572,9 @@ The UMAP embedding shows that even with the relatively small number of genes, cl
 #| fig-cap: Unsupervised clustering of genes in UMAP space
 #| label: fig-gene_umap
 p12 <- ggplot(gene_embed, aes(x = umap1, y = umap2, color = leiden)) + 
-       geom_point(size = 2, alpha = 0.75, stroke = 0) + 
+       geom_point(size = 2, 
+                  alpha = 0.75, 
+                  stroke = 0) + 
        labs(x = "UMAP 1", 
             y = "UMAP 2", 
             color = "Gene Cluster") +
@@ -802,15 +810,17 @@ Finally, we can use additive models to estimate the statistical significance of 
 prog_signif <- geneProgramSignificance(list(seu$peptide_production, 
                                             seu$cell_cycle, 
                                             seu$differentiation, 
-                                            seu$regulation_of_organogenesis), 
+                                            seu$regulation_of_organogenesis, 
+                                            seu$organogenesis), 
                                        pt = sling_pt$PT, 
                                        program.labels = c("Peptide production", 
                                                           "Cell cycle", 
                                                           "Differentiation", 
+                                                          "Regulation of organogenesis", 
                                                           "Organogenesis"))
 ```
 
-All four gene programs appear to be significantlty associated with pseudotime. 
+All four gene programs appear to be significantly associated with pseudotime. 
 
 ```{r}
 #| code-fold: true
@@ -850,11 +860,11 @@ select(dyn_go_bp_terms, term_name, p_value, source) %>%
   kableExtra::kable_classic(c("hover"), full_width = FALSE)
 ```
 
-# Conclusions
+# Conclusions {#sec-conclusions}
 
 Hopefully this vignette has been a useful introduction to running the `scLANE` software and using its outputs to help better understand biology at single-cell resolution. If you have questions about how the models work or are interpreted, software issues, or simply want to compare results feel free to open an issue on [the GitHub repository](https://github.com/jr-leary7/scLANE) or reach out via email to <j.leary@ufl.edu>. 
 
-# References
+# References {#sec-refs}
 
 1. Bastidas-Ponce, Aimée *et al*. [Comprehensive single cell mRNA profiling reveals a detailed roadmap for pancreatic endocrinogenesis](https://doi.org/10.1242/dev.173849). *Development* (2019).
 
@@ -862,7 +872,7 @@ Hopefully this vignette has been a useful introduction to running the `scLANE` s
 
 3. Stoklosa, Jakub & David Warton. [A generalized estimating equation approach to multivariate adaptive regression splines](https://doi.org/10.1080/10618600.2017.1360780). *Journal of Computational and Graphical Statistics* (2018). 
 
-# Session Info 
+# Session Info {#sec-SI}
 
 ```{r}
 sessioninfo::session_info()
