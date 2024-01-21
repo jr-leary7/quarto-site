@@ -46,5 +46,8 @@
   },
   "knowledge_base/scholarly_writing.qmd": {
     "scholarly_writing.html": "a0bc8924"
+  },
+  "tutorials/Trajectory_GRN.qmd": {
+    "Trajectory_GRN.html": "2f796292"
   }
 }
