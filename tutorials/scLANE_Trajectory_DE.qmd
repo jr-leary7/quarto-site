@@ -6,7 +6,7 @@ author:
   orcid: 0009-0004-8821-3269
   affiliations:
     - name: University of Florida
-      department: Biostatistics 
+      department: Department of Biostatistics 
       city: Gainesville
       state: FL
 date: today
@@ -68,19 +68,15 @@ library(ComplexHeatmap)  # heatmaps
 rename <- dplyr::rename
 ```
 
-# Helper Functions {#sec-fns}
+# Helper functions {#sec-fns}
 
-We'll also define a couple utilities to make our plots cleaner to read & easier to make. 
+We'll also define a utility function to make our plots cleaner to read & easier to make. 
 
 ```{r}
-theme_umap <- function(base.size = 12) {
-  ggplot2::theme(axis.ticks = ggplot2::element_blank(), 
-                 axis.text = ggplot2::element_blank(), 
-                 plot.subtitle = ggplot2::element_text(face = "italic", size = 9), 
-                 plot.caption = ggplot2::element_text(face = "italic", size = 9))
-}
 guide_umap <- function(key.size = 4) {
-  ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = key.size, alpha = 1)))
+  ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = key.size,
+                                                                    alpha = 1, 
+                                                                    stroke = 0.25)))
 }
 ```
 
@@ -102,7 +98,7 @@ import scvelo as scv
 adata = scv.datasets.pancreas()
 ```
 
-The `AnnData` object contains data that we'll need to extract, specifically the counts matrices (stored in `AnnData.layers`) and the cell-level metadata (which is in `AnnData.obs`). 
+The `AnnData` object contains data that we'll need to extract, specifically the spliced & unspliced mRNA counts matrices (stored in `AnnData.layers`) and the cell-level metadata (which is in `AnnData.obs`). 
 
 ```{python}
 adata
@@ -227,8 +223,7 @@ p0 <- Embeddings(seu, "umap") %>%
                  stroke = 0) + 
       scale_color_manual(values = palette_cluster) + 
       labs(color = "Leiden Cluster") + 
-      theme_scLANE() + 
-      theme_umap() + 
+      theme_scLANE(umap = TRUE) + 
       theme(plot.title = element_blank(), 
             axis.title = element_blank(), 
             axis.line.x = element_blank()) + 
@@ -245,8 +240,7 @@ p1 <- Embeddings(seu, "umap") %>%
       labs(x = "UMAP 1", 
            y = "UMAP 2", 
            color = "Celltype") + 
-      theme_scLANE() + 
-      theme_umap() + 
+      theme_scLANE(umap = TRUE) + 
       theme(plot.title = element_blank()) + 
       guide_umap()
 p2 <- (p0 / p1) +
@@ -254,9 +248,9 @@ p2 <- (p0 / p1) +
 p2
 ```
 
-# Trajectory Inference {#sec-traj}
+# Trajectory inference {#sec-traj}
 
-## Pseudotime Estimation
+## Pseudotime estimation
 
 We'll start by fitting a trajectory using the `slingshot` R package. We define cluster 5 as the starting cluster, since in this case we're already aware of the dataset's underlying biology. After generating the estimates for each cell, we rescale the ordering to be defined on $[0, 1]$. This has no effect on the trajectory DE results however, and is mostly an aesthetic choice. 
 
@@ -291,8 +285,7 @@ p3 <- Embeddings(seu, "umap") %>%
       labs(color = "Pseudotime") + 
       scale_color_gradientn(colors = palette_heatmap, 
                             labels = scales::label_number(accuracy = 0.01)) + 
-      theme_scLANE() + 
-      theme_umap() + 
+      theme_scLANE(umap = TRUE) +
       theme(axis.title = element_blank(), 
             axis.line.x = element_blank())
 p4 <- (p3 / p1) + 
@@ -300,7 +293,7 @@ p4 <- (p3 / p1) +
 p4
 ```
 
-## Trajectory Differential Expression
+## Trajectory DE testing
 
 Next, we prepare the primary inputs to `scLANE`: our `Seurat` object with the spliced counts set as the default assay, a dataframe containing our estimated pseudotime ordering, a vector of size factors to use as an offset in each model, and a set of genes whose dynamics we want to model. `scLANE` parallelizes over genes in order to speed up the computation at the expense of using a little more memory. The models are fit using NB GLMs with optimal spline knots identified empirically, and differential expression is quantified using a likelihood ratio test of the fitted model vs. a constant (intercept-only) model. In practice, genes designated as HVGs are usually the best candidates for modeling, so we choose the top 3,000 HVGs as our input. 
 
@@ -345,7 +338,7 @@ select(scLANE_res_tidy,
   kableExtra::kable_classic(full_width = FALSE, "hover")
 ```
 
-Next, we can use the `plotModels()` function to visualize the fitted models from `scLANE` and compare them to other modeling methods. The gene [*Neurog3*](https://www.ncbi.nlm.nih.gov/gene/11925) is strongly associated with epithelial cell differentiation, and indeed we see a clear, nonlinear transcriptional dynamic across pseudotime for that gene. A traditional GLM fails to capture that nonlinearity, and while a GAM fits the trend smoothly, it seems to overfit the dynamics near the boundaries of pseudotime - [a known issue with additive models](https://www.routledge.com/Generalized-Additive-Models-An-Introduction-with-R-Second-Edition/Wood/p/book/9781498728331). Only the `scLANE` model accurately models the rapid upregulation and equally swift downregulation of the transcription factor neurogenin-3 (*Neurog3*) over pseudotime, in addition to identifying the cutpoint in pseudotime at which downregulation begins. 
+Next, we can use the `plotModels()` function to visualize the fitted models from `scLANE` and compare them to other modeling methods. The gene [*Neurog3*](https://www.ncbi.nlm.nih.gov/gene/11925) is strongly associated with epithelial cell differentiation, and indeed we see a clear, nonlinear transcriptional dynamic across pseudotime for that gene. A traditional GLM fails to capture that nonlinearity, and while a GAM fits the trend smoothly, it seems to overfit the dynamics near the boundaries of pseudotime - [a known issue with additive models](https://www.routledge.com/Generalized-Additive-Models-An-Introduction-with-R-Second-Edition/Wood/p/book/9781498728331). Only the `scLANE` model accurately models the rapid upregulation and equally swift downregulation of the transcription factor neurogenin-3 (*Neurog3*) over pseudotime, in addition to identifying the cutpoint in pseudotime at which downregulation begins.
 
 ```{r}
 #| code-fold: true
@@ -448,7 +441,7 @@ p7 <- getFittedValues(scLANE_models,
                   GAM_se_link = predict(nbGAM(expr = rna_raw, 
                                               pt = sling_pt, 
                                               Y.offset = cell_offset, 
-                                              spline.df = 3), se.fit = T)[[2]]) %>% 
+                                              spline.df = 3), se.fit = TRUE)[[2]]) %>% 
       mutate(GAM_pred = exp(GAM_fitted_link) * cell_offset, 
              GAM_ci_ll = exp(GAM_fitted_link - qnorm(0.975) * GAM_se_link) * cell_offset, 
              GAM_ci_ul = exp(GAM_fitted_link + qnorm(0.975) * GAM_se_link) * cell_offset, 
@@ -483,7 +476,7 @@ p7
 
 ## Distribution of knot locations
 
-Let's take a broader view of the dataset by examining the distribution of adaptively chosen knots from our models. We limit the analysis to the set of genes determined to be dynamic. 
+Let's take a broader view of the dataset by examining the distribution of adaptively chosen knots from our models. We limit the analysis to the set of `r sum(scLANE_res_tidy$Gene_Dynamic_Overall)` genes determined to be dynamic. 
 
 ```{r}
 dyn_genes <- filter(scLANE_res_tidy, Gene_Dynamic_Overall == 1) %>% 
@@ -532,16 +525,15 @@ p10
 
 ## Dynamic gene clustering
 
-We can extract a matrix of fitted values using `smoothedCountsMatrix()`; here we focus on the top 2,000 most dynamic genes, with the goal of identifying clusters of similarly-expressed genes. Next, the `embedGenes()` function reduces dimensionality with PCA, clusters the genes using the Leiden algorithm, & embeds the genes in two dimensions with UMAP.  
+We can extract a matrix of fitted dynamics using `smoothedCountsMatrix()`. Next, the `embedGenes()` function reduces dimensionality with PCA, clusters the genes using the Leiden algorithm, & embeds the genes in two dimensions with UMAP.  
 
 ```{r}
 #| message: false
 #| warning: false
 smoothed_counts <- smoothedCountsMatrix(scLANE_models, 
                                         pt = sling_pt, 
-                                        genes = dyn_genes[1:2000], 
-                                        size.factor.offset = cell_offset, 
-                                        n.cores = 2L)
+                                        genes = dyn_genes, 
+                                        size.factor.offset = cell_offset)
 gene_embed <- embedGenes(log1p(smoothed_counts$Lineage_A), resolution.param = 0.2)
 ```
 
@@ -559,8 +551,7 @@ p11 <- ggplot(gene_embed, aes(x = pc1, y = pc2, color = leiden)) +
             y = "PC 2", 
             color = "Leiden Cluster") +
        paletteer::scale_color_paletteer_d("ggsci::default_igv") + 
-       theme_scLANE() + 
-       theme_umap() + 
+       theme_scLANE(umap = TRUE) + 
        guide_umap()
 p11
 ```
@@ -579,8 +570,7 @@ p12 <- ggplot(gene_embed, aes(x = umap1, y = umap2, color = leiden)) +
             y = "UMAP 2", 
             color = "Gene Cluster") +
        paletteer::scale_color_paletteer_d("ggsci::default_igv") + 
-       theme_scLANE() + 
-       theme_umap() + 
+       theme_scLANE(umap = TRUE) + 
        guide_umap()
 p12
 ```
@@ -629,6 +619,7 @@ The heatmap shows clear dynamic patterns across pseudotime; these patterns are o
 
 ```{r}
 #| code-fold: true
+#| message: false
 #| fig-width: 12
 #| fig-height: 6
 #| fig-cap: Expression cascades of dynamic genes
@@ -683,7 +674,13 @@ mutate(enrich_res$result,
   with_groups(cluster, 
               slice_head,
               n = 5) %>% 
-  select(cluster, term_name, p_value, term_size, query_size, intersection_size, term_id) %>% 
+  select(cluster, 
+         term_name, 
+         p_value, 
+         term_size, 
+         query_size, 
+         intersection_size, 
+         term_id) %>% 
   kableExtra::kbl(digits = 3, 
                   booktabs = TRUE, 
                   col.names = c("Gene Cluster", "Term Name", "Adj. P-value", "Term Size", 
@@ -695,6 +692,7 @@ We can use the `geneProgramScoring()` function to add module scores for each gen
 
 ```{r}
 program_labels <- c("organogenesis", 
+                    "secretion", 
                     "peptide production", 
                     "regulation of organogenesis", 
                     "differentiation", 
@@ -720,8 +718,7 @@ p13 <- Embeddings(seu, "umap") %>%
        labs(color = "Program Score") + 
        scale_color_gradientn(colors = palette_heatmap, 
                              labels = scales::label_number(accuracy = 0.1)) + 
-       theme_scLANE() + 
-       theme_umap() + 
+       theme_scLANE(umap = TRUE) + 
        theme(axis.title = element_blank(), 
              axis.line.x = element_blank())
 p14 <- (p13 / p1) + 
@@ -763,7 +760,7 @@ program_drivers <- geneProgramDrivers(seu,
                                       verbose = FALSE)
 ```
 
-We display the top 10 most-correlated genes here. For example, retinol-binding protein 4 (*Rbp4*) is a known marker of pancreatic islet cells, and of delta cells more specifically ([source](https://doi.org/10.1038/s42255-023-00876-x)).
+We display the top 10 most-correlated genes here. For example, carboxypeptidase E (*Cpe*) is a known marker of pancreatic endocrine cells, and is involved in the regulation of peptide production.
 
 ```{r}
 #| code-fold: true
@@ -777,7 +774,7 @@ slice_head(program_drivers, n = 10) %>%
   kableExtra::kable_classic(c("hover"), full_width = FALSE)
 ```
 
-Indeed, normalized expression of *Rbp4* is high across all mature endocrine celltypes, with delta cells showing the highest overall mean expression.
+Indeed, normalized expression of *Cpe* is high across all mature endocrine celltypes, with alpha cells showing the highest overall mean expression.
 
 ```{r}
 #| code-fold: true
@@ -787,7 +784,7 @@ Indeed, normalized expression of *Rbp4* is high across all mature endocrine cell
 #| fig-width: 9
 #| fig-height: 5
 p16 <- data.frame(celltype = seu$celltype, 
-                  rna = seu@assays$spliced@data["Rbp4", ]) %>% 
+                  rna = seu@assays$spliced@data["Cpe", ]) %>% 
        ggplot(aes(x = celltype, y = rna, color = celltype)) + 
        ggbeeswarm::geom_quasirandom(alpha = 0.75, 
                                     size = 2, 
@@ -808,19 +805,21 @@ Finally, we can use additive models to estimate the statistical significance of 
 
 ```{r}
 prog_signif <- geneProgramSignificance(list(seu$peptide_production, 
+                                            seu$secretion, 
                                             seu$cell_cycle, 
                                             seu$differentiation, 
                                             seu$regulation_of_organogenesis, 
                                             seu$organogenesis), 
                                        pt = sling_pt$PT, 
-                                       program.labels = c("Peptide production", 
+                                       program.labels = c("Peptide production",
+                                                          "Secretion", 
                                                           "Cell cycle", 
                                                           "Differentiation", 
                                                           "Regulation of organogenesis", 
                                                           "Organogenesis"))
 ```
 
-All four gene programs appear to be significantly associated with pseudotime. 
+All six gene programs appear to be significantly associated with pseudotime. 
 
 ```{r}
 #| code-fold: true

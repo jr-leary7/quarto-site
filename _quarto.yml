@@ -38,6 +38,7 @@ website:
       - text: "Tutorials"
         menu: 
           - tutorials/scLANE_Trajectory_DE.qmd
+          - tutorials/Trajectory_GRN.qmd
           - tutorials/SCISSORS_Reclustering.qmd
           - tutorials/Neurogenesis_with_scLANE.qmd
           - tutorials/CellRank_Tutorial.qmd

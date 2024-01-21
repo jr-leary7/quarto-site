@@ -6,7 +6,7 @@ author:
   orcid: 0009-0004-8821-3269
   affiliations:
     - name: University of Florida
-      department: Biostatistics 
+      department: Department of Biostatistics  
       city: Gainesville
       state: FL
 date: today
@@ -24,6 +24,7 @@ format:
     fig-height: 6
     df-print: kable
     link-external-newwindow: true
+    number-sections: true
 execute:
   cache: false
   freeze: auto
@@ -34,11 +35,11 @@ execute:
 reticulate::use_virtualenv("../../../Research/Python_Envs/personal_site/")
 ```
 
-# Introduction
+# Introduction {#sec-intro}
 
 Scholarly writing can be a difficult, complex, and occasionally expensive process.It's hard enough to simply get ideas on paper in a coherent manner - much less do so while adhering to journal formatting requirements, keeping track of references, and ensuring the reproducibility of your results. Collaboration with other authors introduces a whole host of other issues including version control, tracking reviewer comments, and differences in preferred writing tools. The purpose of this writeup is to lay out some thoughts on how to best address some of these issues in a way that focuses on reproducibility and ease of collaboration. No single tool is able to ameliorate very concern, but this workflow has - for the most part - worked well for me as of late. In general, the options fall along two axes: reproducibility and ease of use / collaboration. The goal is to find an appropriate (which is, to be fair, highly subjective) balance between the two. Lastly, we'll place a small amount of importance on the aesthetics of the final output. Some would posit that this should not be a primary concern, and that view does have some merit. I am guilty of spending too much time on making figures pretty, etc. (just ask [my advisor](https://www.rhondabacher.com)), but to some degree the aesthetic properties of the final paper do matter. People pay more attention to well-formatted, visually attractive figures and text, thus if the goal of each paper is in part to reach a wide audience the final product should be aesthetically pleasing. Anyways, off we go.
 
-# Text editors & output formats
+# Text editors & output formats {#sec-editors}
 
 ## Microsoft Word
 
@@ -66,7 +67,7 @@ Lastly, there will always a subset of scientists who have a highly-customized in
 
 **Cons**: almost no one else wants to write an entire manuscript in a text editor, and non-technical collaborators will almost certainly balk at a LaTeX-only approach. Tangentially, LaTeX has a very steep learning curve; it's incredibly versatile and the results are usually quite aesthetically pleasing, but learning it is much harder than opening Word or using Markdown.
 
-# Figures
+# Figures {#sec-figures}
 
 In a perfect world, it would be possible to have your figure generation code embedded into your source document, thus providing the ability to reproduce your figures every time the document's output is compiled. In reality, this complicates your writing workflow quite a bit unless your document is relatively short & simple. It also requires that authors use a programmatic writing environment like Quarto or RMarkdown, which not everyone is willing to do. Lastly, it's not possible to make every type of figure using R or Python; sometimes manual intervention or editing is required.
 
@@ -84,13 +85,13 @@ The downsides are that some figures just require manual editing in a GUI-based s
 
 The main alternative (or perhaps extension) to programmatic approaches are GUI softwares such as Photoshop, InDesign, and Illustrator. Obviously some programmatic aspect is required to process the data and plot it, but these programs can be extraordinarily helpful when it comes to downstream processing. Specifically, adding text and other annotations and aligning multiple subfigures are both generally easier when using a point-and-click software. The downsides are mainly that GUI workflows are not reproducible or shareable, and manipulating figure post-hoc must be re-done every time you need to change a figure.
 
-# Citations
+# Citations {#sec-citations}
 
 The two main options here, in my experience, are [Zotero](https://www.zotero.org) and [EndNote](https://endnote.com). The two products are fairly similar, with the primary difference being that Zotero is (mostly) free and EndNote is \$180 per year - if you're a student, otherwise it's around \$325. If your college or department offers a subscription to EndNote it's a great product to have, but otherwise it's a little pricey, especially for PhD students. Zotero on the other hand is free, with costs only being incurred if you need to buy more cloud storage to save your library online. I pay something around \$20 a year for 2GB of storage, which is more than enough for my needs and allows me to access my library of PDFs anywhere I go.
 
 Both programs integrate with Word, with the EndNote plugin being a little faster and easier to use. If you're using Quarto or RMarkdown, only Zotero is supported. For JupyterLab citations aren't supported by default, but [this extension](https://github.com/krassowski/jupyterlab-citation-manager) adds Zotero integration. In summary, I would recommend Zotero unless someone else is paying for it since the longterm costs are much lower and the products are highly similar.
 
-# My workflow
+# My workflow {#sec-workflow}
 
 Here's a general schema for how I write manuscripts:
 
@@ -114,7 +115,7 @@ flowchart TD
   G --> H
 ```
 
-# Miscellaneous notes
+# Miscellaneous notes {#sec-notes}
 
 - When rendering a Quarto document to Word or HTML, [any raw LaTeX used is ignored](https://quarto.org/docs/output-formats/pdf-basics.html#raw-latex). This means that functionalities supported when rendering to PDF - such as line numbering, creating tables with LaTeX, and Markdown caption formatting - are unsupported. As such, a Quarto doc that looks great as a PDF might look not-so-great as a Word doc. For example, if you want every title in each figure's caption to be bold then the below snippet added to the YAML metadata takes care of it for a PDF, but your Word output will differ.
 
@@ -133,7 +134,7 @@ quarto pandoc -o reference_doc.docx --print-default-data-file reference.docx
 
 - *In my opinion*, the default settings for rendering Quarto to Word are pretty ugly, so the reference doc approach is somewhat of a necessity.
 
-# Concluding thoughts
+# Concluding thoughts {#sec-conclusion}
 
 Writing manuscripts is a time-consuming and highly technical process that involves collating code, data, figures, text, and references into a single document with a cohesive narrative structure. This can be a monumental task, and choosing the right software to perform the separate tasks can be a challenge. Since most of my projects involve a smaller amount of collaborators (my [most recent preprint](https://doi.org/10.1101/2023.12.19.572477) was just myself and my advisor) I have a bit of latitude when it comes to how I write. While my advisor would probably prefer that I work more in Word docs for the sake of change-tracking and collaboration, I really do love Quarto's ease of use and the aesthetics of its output. The following (in some order) are the main reasons why:
 

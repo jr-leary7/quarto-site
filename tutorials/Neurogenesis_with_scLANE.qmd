@@ -25,6 +25,7 @@ format:
     df-print: kable
     link-external-newwindow: true
     tbl-cap-location: bottom
+    number-sections: true
 execute:
   cache: false
   freeze: auto
@@ -39,9 +40,9 @@ reticulate::use_virtualenv("~/Desktop/PhD/Research/Python_Envs/personal_site/", 
 set.seed(312)
 ```
 
-# Introduction
+# Introduction {#sec-intro}
 
-# Libraries
+# Libraries {#sec-libs}
 
 ```{r}
 #| message: false
@@ -54,7 +55,7 @@ library(slingshot)             # pseudotime estimation
 library(SingleCellExperiment)  # scRNA-seq data structures
 ```
 
-# Color palettes
+# Color palettes {#sec-colors}
 
 ```{r}
 palette_celltype <- paletteer::paletteer_d("ggsci::category10_d3")
@@ -63,7 +64,7 @@ palette_week <- paletteer::paletteer_d("ggsci::default_igv")
 palette_heatmap <- paletteer::paletteer_d("MetBrewer::Hiroshige", direction = -1)
 ```
 
-# Data
+# Data {#sec-data}
 
 We begin by reading in the data from [Zhong *et al* (2018)](https://doi.org/10.1038/nature25980), which contains 2,394 cells from developing human prefrontal cortex (PFC) samples. The counts and metadata are handily available in the `scRNAseq` package. 
 
@@ -80,7 +81,7 @@ seu_brain <- CreateSeuratObject(counts(sce_brain),
                                 min.features = 0)
 ```
 
-# Preprocessing
+# Preprocessing {#sec-preprocess}
 
 First, we'll need to integrate expression across the `r length(unique(seu_brain$sample))` samples. We'll do this using the new `Layers` functionality implemented in `Seurat` v5 ([vignette](https://satijalab.org/seurat/articles/seurat5_integration)). 
 
@@ -187,7 +188,7 @@ p1 <- data.frame(Embeddings(seu_brain, "umap")) %>%
 p1
 ```
 
-# Analysis
+# Analysis {#sec-analysis}
 
 ## Celltype annotation
 
@@ -569,7 +570,7 @@ After running the `getResultsDE()` function we now have a tidy table of differen
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: "Sample DE test output from scLANE"
+#| tbl-cap: Sample DE test output from scLANE
 #| label: tbl-scLANE_output
 select(scLANE_de_res, 
        Gene, 
@@ -857,11 +858,11 @@ filter(spec_terms_opc, grepl("oligodendrocyte", term_name)) %>%
   kableExtra::kable_classic(full_width = FALSE, "hover")
 ```
 
-# Conclusions
+# Conclusions {#sec-conclusions}
 
 Here we showcased an end-to-end trajectory analysis, from initial celltype annotation to trajectory inference. After fitting a trajectory with `Slingshot` in a supervised manner using existing biological knowledge, we performed trajectory differential expression testing with `scLANE`. This opened up several downstream analysis options, including the comparison of gene dynamics across lineages, the inspection of the locations of transcriptional switches, and lineage-specific trajectory enrichment analysis. In doing so, we both recapitulated points from the original authors' analysis (e.g., visualizing dynamics of relevant transcription factors) and added to them (e.g., performing trajectory enrichment analysis). For more information on `scLANE`, see the corresponding [preprint](https://doi.org/10.1101/2023.12.19.572477) or the [GitHub repository](https://github.com/jr-leary7/scLANE). 
 
-# Session info
+# Session info {#sec-SI}
 
 ```{r}
 sessioninfo::session_info()
