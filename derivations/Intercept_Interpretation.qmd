@@ -1,7 +1,7 @@
 ---
 title: "Understanding Intercepts in Linear Regression Models"
 author:
-  name: Jack Leary
+  name: Jack R. Leary
   email: j.leary@ufl.edu
   orcid: 0009-0004-8821-3269
   affiliations:
@@ -17,10 +17,16 @@ format:
     code-copy: true
     code-tools: true
     toc: true
+    toc-depth: 2
     embed-resources: true
     fig-format: retina
+    fig-width: 9
+    fig-height: 6
     df-print: kable
     link-external-newwindow: true
+    tbl-cap-location: bottom
+    fig-cap-location: bottom
+    number-sections: true
 execute: 
   cache: true
   freeze: auto
@@ -30,18 +36,18 @@ execute:
 set.seed(312)  # lucky seed 
 ```
 
-# Libraries 
+# Libraries {#sec-libs}
 
 ```{r, message=FALSE, warning=FALSE, results='hide'}
 library(dplyr)    # data manipulation
 library(ggplot2)  # plots
 ```
 
-# Introduction 
+# Introduction {#sec-intro}
 
 One concept I struggled with a lot in early statistics courses was what the intercept meant in linear regression models. I tended to just ignore it unless questions specifically pertained to it, and the vast majority of homework questions focused on interpreting the effects of covariates instead. I also saw many of my master's-level students struggle with the topic in the SAS computing course I taught during Fall 2022 as well, with confusion about the effect of centering, the difference between centering and standardizing, and intercept interpretation in the different types of (generalized) linear (mixed) models being common pain points on homeworks. As such, I thought it might be useful - for myself and others - to jot down some notes on how the intercept is estimated and what it means under a variety of regression modelling frameworks. 
 
-# Matrix Algebra Review 
+# Matrix algebra review {#sec-linalg}
 
 We're going to start from first principles here with a quick review on matrix algebra. Linear regression is, after, just multiplying matrices in a clever way. 
 
@@ -64,7 +70,7 @@ $$
     b_{12} & b_{22} \\
   \end{bmatrix} \\
 \end{aligned}
-$$
+$$ {#eq-1}
 
 Their product, another matrix $C$, also has 2 rows and 2 columns, and its elements are defined like so, with $i$ specifying the row and $j$ the column of each element. What we're doing is finding the dot product of the $i^{\text{th}}$ row of $\mathbf{A}$ and the $j^{\text{th}}$ column of $\mathbf{B}$, the expanded definition of which is below. 
 
@@ -74,7 +80,7 @@ c_{ij} &= \mathbf{A}_{i*} \cdot \mathbf{B}_{*j} \\
 c_{ij} &= \sum_{k=1}^n a_{ik}b_{kj} \\
 c_{ij} &= a_{i1}b_{1j} + \dots + a_{n1}b_{nj} \\
 \end{aligned}
-$$
+$$ {#eq-2}
 
 As such, we can define the product of $\mathbf{A}$ and $\mathbf{B}$ like so:
 
@@ -92,13 +98,13 @@ $$
     a_{21}b_{11} + a_{22}b_{21} & a_{21}b_{12} + a_{22}b_{22} \\
   \end{bmatrix} \\
 \end{aligned}
-$$
+$$ {#eq-3}
 
 **Important Note**: To multiply two matrices $\mathbf{A}$ and $\mathbf{B}$ together, the number of rows of $\mathbf{B}$ must be equal to the number of columns in $\mathbf{A}$. To generalize: 
 
 $$
 \mathbf{A}_{m \times n} \cdot \mathbf{B}_{n \times p} = \mathbf{C}_{m \times p}
-$$
+$$ {#eq-4}
 
 ### Example 
 
@@ -117,7 +123,7 @@ $$
     1 & 2 \\
   \end{bmatrix} \\
 \end{aligned}
-$$
+$$ {#eq-5}
 
 Their product $\mathbf{C}$ is defined as:
 
@@ -134,7 +140,7 @@ $$
     7 & 14 \\
   \end{bmatrix} \\
 \end{aligned}
-$$
+$$ {#eq-6}
 
 We can check this using R:
 
@@ -163,7 +169,7 @@ $$
   & \mathbf{B}_{n \times n} = A^\prime \\
   & \mathbf{B}_{i, j} = \mathbf{A}_{j, i} \\
 \end{aligned}
-$$
+$$ {#eq-7}
 
 ### Example 
 
@@ -183,7 +189,7 @@ $$
     2 & 0 \\
   \end{bmatrix} \\
 \end{aligned}
-$$
+$$ {#eq-8}
 
 We can confirm this in R using the `t()` function:
 
@@ -203,7 +209,7 @@ The last matrix operation we'll go over is inversion - this one is very importan
 
 $$
 \mathbf{A} \mathbf{A}^{-1} = \mathbf{I}_n
-$$
+$$ {#eq-9}
 
 ### Example 
 
@@ -222,7 +228,7 @@ A_mp_inv <- MASS::ginv(A)
 round(A %*% A_mp_inv)
 ```
 
-## The Identity Matrix 
+## The identity matrix 
 
 ### Theory 
 
@@ -240,7 +246,7 @@ $$
 \mathbf{I}_{n}^\prime &= \mathbf{I}_{n} \\
 \mathbf{I}_{n}^{-1} &= \mathbf{I}_{n} \\
 \end{aligned}
-$$
+$$ {#eq-10}
 
 ### Example 
 
@@ -263,7 +269,7 @@ As is the inverse:
 solve(ident_mat)
 ```
 
-# Linear Model 
+# Linear model {#sec-LMs}
 
 ## Setup 
 
@@ -271,9 +277,9 @@ For now, we'll take it for granted that the solution to a linear regression prob
 
 $$
 \widehat{\boldsymbol{\beta}} = \left(\mathbf{X}^\prime \mathbf{X} \right)^{-1} \mathbf{X}^\prime \mathbf{y}
-$$
+$$ {#eq-11}
 
-## The Intercept-only Model 
+## The intercept-only model 
 
 The intercept-only model (also sometimes called the null model) is defined as linear regression when $\mathbf{X}$ is simply a column vector of ones:
 
@@ -284,7 +290,7 @@ $$
     \vdots \\
     1 \\
   \end{bmatrix}
-$$
+$$ {#eq-12}
 
 We know the intercept-only model produces the mean as the one predicted value, as the mean minimizes the sum of squared errors in the absence of any other covariates. We can check this using R - we'll first generate a vector $\mathbf{y}$ consisting of 5 realizations of a random variable, such that $Y \sim \mathcal{N}(0, 3)$. 
 
@@ -311,7 +317,7 @@ Let's use linear algebra to figure out why this is true. Once again, we know tha
 
 $$
 \widehat{\boldsymbol{\beta}} = \left(\mathbf{X}^\prime \mathbf{X} \right)^{-1} \mathbf{X}^\prime \mathbf{y}
-$$
+$$ {#eq-13}
 
 Let's first define $\mathbf{X}$ - just a column vector of 1s with $n = 5$ rows:
 
@@ -343,7 +349,7 @@ Lastly, we multiply the above by $\mathbf{y}$. Remember how multiplying vectors 
 
 $$
 \mathbf{Z} \mathbf{y} = \sum_{i=1}^n \mathbf{Z}_i \mathbf{y}_i
-$$
+$$ {#eq-14}
 
 Since each element of $\mathbf{Z}$ is the same, $n^{-1}$, by the transitive property the above quantity is equivalent to:
 
@@ -353,7 +359,7 @@ $$
   \mathbf{Z} \mathbf{y} &= \sum_{i=1}^n \mathbf{Z}_i \mathbf{y}_i \\
   \mathbf{Z} \mathbf{y} &= n^{-1} \sum_{i=1}^n \mathbf{y}_i \\
 \end{aligned}
-$$
+$$ {#eq-15}
 
 This is simply the sum of all the elements of $\mathbf{y}$ divided by $n$ - the mean! We can verify this with R by using linear algebra to compute the OLS solution:
 
@@ -367,7 +373,7 @@ This is equal to simply taking the mean of $\mathbf{y}$:
 mean(y)
 ```
 
-## Models with Categorical Predictors
+## Models with categorical predictors
 
 In practice of course we usually build models with predictors of interest outside of the intercept. Categorical variables are composed of discrete values, each with a different meaning e.g., we could have a variable containing the type of treatment a patient has received. In order to fit models with categorical variables, it's necessary to expand a categorical variable into multiple indicator variables - variables composed of 1s and 0s depending on whether a certain observation belongs to a certain category. This is a little confusing, so let's show an example. We'll start by creating a categorical variable . 
 
@@ -433,7 +439,7 @@ To summarize: when categorical variables are used in an ordinary linear regressi
 Working with categorical variables (or factors, as R labels them) can be confusing. If you want to gain a deeper understanding of how factors work, check out [the chapter on them in the R for Data Science book](https://r4ds.had.co.nz/factors.html). For factor-related tools, try the [`forcats` R package](https://forcats.tidyverse.org/articles/forcats.html), which is part of the [`tidyverse`](https://www.tidyverse.org) ecosystem and makes dealing with factors a lot simpler. 
 :::
 
-## Models with Continuous Predictors 
+## Models with continuous predictors 
 
 Continuous predictors differ from categorical ones in that they do not have a discrete set of possible values. The interpretation of the intercept thus differs. For any regression, the intercept interpretation is the value of the response when all predictors are equal to zero. What "all predictors equal to zero" means depends on the types of predictors you're using; when predictors are categorical this implies that all predictors are at their reference levels (thanks to the indicator variable encoding that's done in the background). With continuous variables, being equal to zero might have a reasonable interpretation or it might not, depending on what the variable is. In this case, think of the intercept like you would in middle school when learning $y = mx + b$. The intercept, $b$, is the value of $y$ where $x = 0$, like the plot below. 
 
@@ -494,7 +500,7 @@ cont_mod <- lm(y ~ X)
 coef(cont_mod)
 ```
 
-### Centering Continuous Predictors
+### Centering continuous predictors
 
 One way to make models like this more interpretable is to center continuous variables around their means. Doing so ensures that the centered version of continuous variable is equal to zero when the original version of the variable is at its mean. This can give a better interpretation to some models e.g., if the continuous variable of interest was patient age, then the intercept would be the expected value of the response for a patient of mean age. Since centering doesn't change the units of the continuous variable, only the intercept $\beta_0$ will change i.e., the coefficient for our predictor of interest will stay the same. We can validate this by creating a centered version of $\mathbf{X}$ and re-running the regression. The `scale()` function centers (subtracts the mean) *and* standardizes (divides by the standard deviation) by default, so we need to set `scale = FALSE` in order to only center the data. 
 
@@ -504,7 +510,7 @@ cont_mod_centered <- lm(y ~ X_cent)
 coef(cont_mod_centered)
 ```
 
-### Standardizing Continuous Predictors 
+### Standardizing continuous predictors 
 
 Standardizing (or scaling, as R calls it) can also occasionally be useful. Dividing by the standard deviation in addition to centering results in our continuous random variable having mean 0 and standard deviation 1. This does change the units of the variable though, which is important to remember. It does not, however, change the interpretation of the intercept - which remains unchanged from the model we fit above with only centering. The coefficient $\beta_1$ differs though, and now represents the change in $\mathbf{y}$ given a one standard deviation increase in $\mathbf{X}$. For more on standardization see [this StatLect post](https://statlect.com/fundamentals-of-statistics/linear-regression-with-standardized-variables) and [this blog post from Columbia's Dr. Andrew Gelman](https://statmodeling.stat.columbia.edu/2009/07/11/when_to_standar/).
 
@@ -522,7 +528,7 @@ cont_mod_resp_scaled <- lm(y_scaled ~ X_scaled)
 coef(cont_mod_resp_scaled)
 ```
 
-## Models with Categorical & Continuous Predictors 
+## Models with categorical & continuous predictors 
 
 Finally, let's put it all together. In most real-life modeling scenarios you'll have a mix of categorical and continuous predictors, and thus care must be taken when preparing the data. You generally will want your intercept to be meaningful - whatever that means for the data you're analyzing. In this case, we'll simulate data under the following scenario: our response variable $\mathbf{y}$ is the expression of some gene of interest in each of $n = 500$ patients, and our predictor matrix $\mathbf{X}$ is composed of one categorical variable representing a treatment, a continuous variable representing patient age in years, and another categorical variable representing the facility at which each patient was treated. 
 
@@ -581,7 +587,7 @@ full_mod <- lm(y ~ age_centered + treatment + facility, X_df)
 coef(full_mod)
 ```
 
-# Generalized Linear Model
+# Generalized linear model {#sec-GLMs}
 
 ## Setup 
 
@@ -589,11 +595,11 @@ We'll next move to the more complicated case of the generalized linear model (GL
 
 $$
 g(\mathbb{E}[\mathbf{y}]) = \beta_0 + \beta_1 \mathbf{X}_1 + \dots + \beta_p\mathbf{X}_p
-$$
+$$ {#eq-16}
 
 Like ordinary linear models, GLMs are linear in their covariates (as shown above), which is what gives them their relatively easy interpretations. However, unlike with ordinary linear regression, there is no simple closed-form solution to the above equation. Instead, a solution is estimated using something like iteratively reweighted least squares or Newton's method. As such, we won't be able to provide exact calculations of the GLM solutions like we did above with the ordinary linear models, so we'll stick to first providing the interpretation and then checking to make sure the fitted model matches that interpretation.  
 
-## The Intercept-only Model 
+## The intercept-only model 
 
 In the intercept-only model, the GLM formula becomes: 
 
@@ -602,7 +608,7 @@ $$
 g(\mathbb{E}[\mathbf{y}]) &= \beta_0 \\
 \mathbb{E}[\mathbf{y}] &= g^{-1}(\beta_0) \\
 \end{aligned}
-$$
+$$ {#eq-17}
 
 If we're using $g(\cdot) = \text{log}(\cdot)$ (the log-link), then the inverse of $g(\cdot)$ is $g^{-1}(\cdot) = \text{exp}(\cdot)$. In this case, it's easy to see that the intercept $\beta_0$ is actually the natural log of the mean of the response variable $\mathbf{y}$. 
 
@@ -633,7 +639,7 @@ Thus, when we use the inverse of the link function (exponentiation) on the estim
 exp(coef(null_mod_pois))
 ```
 
-## Models with Categorical Predictors 
+## Models with categorical predictors 
 
 The extension to categorical predictors is much the same as we saw before with ordinary linear models, with the primary change being that we're now working on the log scale. Let's add a categorical predictor to our model. First we simulate a categorical $\mathbf{X}$: 
 
@@ -679,7 +685,7 @@ Lastly, if we exponentiate the sum of the coefficients (the order of these opera
 exp(sum(coef(cat_mod_pois)))
 ```
 
-## Models with Continuous Predictors 
+## Models with continuous predictors 
 
 As with ordinary linear models, in the presence of a continuous predictor the intercept becomes the expected value of the response variable conditional on the line of best fit that we generate. First we generate another $\mathbf{y}$ with a larger sample size and a slightly lower value of $\lambda$. Then we generate Gamma random noise, and define the predictor $\mathbf{X} = 3.1y + \epsilon$. 
 
@@ -732,7 +738,7 @@ data.frame(y = y,
   theme_classic()
 ```
 
-## Models with Categorical & Continuous Predictors 
+## Models with categorical & continuous predictors 
 
 Lastly, we'll again examine the most common real-life situation - models with both categorical and continuous predictors. Consider a dataset where the response is a Poisson-distributed random variable, say the number of copies of viral RNA in a sample taken from a patient. First, let's say that our sample size is set to a generous $n = 1000$. Next, imagine that we have two continuous predictors; the first being patient age in years, and the second being the number of months that the patient has been in treatment. We'll simulate age as a Poisson random variable with a mean of 25 years, and months in treatment as a negative binomial random variable with a mean of 3 months and overdispersion parameter (denoted `size` in the `rnbinom()` function) of 4. Lastly, let's define a categorical predictor with 3 possible treatment categories. We store all 3 predictors in a `data.frame`. 
 
@@ -764,7 +770,7 @@ We know that for our two continuous predictors, the intercept will indicate the 
 
 $$
 \text{log}(\mathbb{E}[\text{Viral RNA}]) = \beta_0 + \beta_{\text{age}} X_{\text{age}} + \beta_{\text{months}} X_{\text{months}} + \beta_{\text{treat}} X_{\text{treat}} + \epsilon
-$$
+$$ {#eq-18}
 
 Let's visualize the data so that we can get some idea of what the relationships between our variables are, and what the intercept of the model we're going to fit will tell us. First let's look at the relationship between **age** and the response, splitting by treatment group. We add a purple vertical line showing where the overall mean of **age** is. 
 
@@ -832,7 +838,7 @@ Exponentiating $\beta_0$ now gives us the expected value of $\mathbf{y}$ for a p
 exp(coef(full_mod_pois_centered))[1]
 ```
 
-# Conclusions 
+# Conclusions {#sec-conclusions}
 
 While regression intercepts can seem tricky at first and don't always carry a useful interpretation by default, I think they're more useful than introductory & intermediate statistics courses give them credit for. I understand those course's emphasis on interpreting estimates for covariates of interest of course, as those are what generally determine the success or failure of our scientific hypotheses, but the intercept can often help establish a useful baseline value against which you can compare your other estimates. 
 
@@ -840,7 +846,7 @@ There's a couple important takeaways I'd like to re-emphasize. **First** - alway
 
 Finally, I've included some references below that have been helpful to me, and which I would recommend as further reading if you're interested in the technical details of regression & other modeling methods. 
 
-# References 
+# References {#sec-refs}
 
 1. Faraway, J. [Extending the Linear Model with R, 2nd Edition](https://doi.org/10.1201/9781315382722). *Chapman and Hall*. 2016. 
 
@@ -852,7 +858,7 @@ Finally, I've included some references below that have been helpful to me, and w
 
 5. Strang, G. [Introduction to Linear Algebra, 5th Edition](https://math.mit.edu/~gs/linearalgebra/ila5/indexila5.html). *Wellesley-Cambridge Press*. 2016. 
 
-# Session Info 
+# Session info {#sec-SI}
 
 ```{r}
 sessioninfo::session_info()

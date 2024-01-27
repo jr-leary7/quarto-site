@@ -1,7 +1,7 @@
 ---
 title: "Integrating scRNA-seq Datasets with Python"
 author:
-  name: Jack Leary
+  name: Jack R. Leary
   email: j.leary@ufl.edu
   orcid: 0009-0004-8821-3269
   affiliations:
@@ -16,29 +16,30 @@ format:
     code-copy: true
     code-tools: true
     toc: true
+    toc-depth: 2
     embed-resources: true
     fig-format: retina
     df-print: kable
     link-external-newwindow: true
     fig-cap-location: bottom
     fig-align: center
+    number-sections: true
 execute: 
   cache: false
   freeze: auto
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(warning = FALSE, 
-                      comment = NA, 
-                      fig.retina = TRUE)
+knitr::opts_chunk$set(comment = NA)
 reticulate::use_virtualenv("~/Desktop/PhD/Research/Python_Envs/personal_site/", required = TRUE)
+set.seed(312)
 ```
 
-# Introduction
+# Introduction {#sec-introduction}
 
 The need to integrate data from scRNA-seq samples into one harmonized dataset has increased in recent years as single cell sequencing has gotten cheaper, making it easier to collect data from multiple subjects, timepoints, or conditions. The goal of most integration techniques is to create an embedding that is (relatively) free of batch effects and that does not lead to the cells clustering by subject ID. There are many methods available to perform integration in both R & Python, and evaluating which method is "best" for your dataset can be tricky & subjective. In this tutorial we'll try out several of the integration methods available in the `scanpy` package and compare their results. We'll use a SmartSeq2 dataset containing myeloid cells from the developing human fetal liver that was originally analyzed in [Popescu *et al* (2020)](https://doi.org/10.1038/s41586-019-1652-y). As such, our goal will be to determine which integration method results in the best embedding for downstream trajectory analysis. In developmental biology settings, a "good" scRNA-seq integrated embedding is smoothly connected (i.e., no spaced-out, discrete clusters), and places celltypes in roughly the order expected based on known biology. 
 
-# Libraries
+# Libraries {#sec-libs}
 
 ## R
 
@@ -46,7 +47,7 @@ The need to integrate data from scRNA-seq samples into one harmonized dataset ha
 library(dplyr)       # dataframe tools
 library(Matrix)      # sparse matrices
 library(Seurat)      # scRNA-seq tools
-library(ggplot2)     # plots
+library(ggplot2)     # nice plots
 library(reticulate)  # Python interface
 ```
 
@@ -67,7 +68,7 @@ from scipy.sparse import csr_matrix  # sparse matrices
 warnings.simplefilter('ignore', category=UserWarning)
 ```
 
-# Theme for `matplotlib`
+# Theme for `matplotlib` {#sec-theme}
 
 Here we define a theme for `matplotlib` that mostly matches `ggplot2::theme_classic()`. 
 
@@ -112,7 +113,7 @@ plt.rcParams.update({
 })
 ```
 
-# Data 
+# Data {#sec-data}
 
 We'll start by reading in the SmartSeq2 scRNA-seq data from [Popescu *et al*](https://doi.org/10.1038/s41586-019-1652-y), which we downloaded from [the Human Developmental Cell Atlas portal](https://developmental.cellatlas.io/fetal-liver). Some massaging of the data is necessary to get it ready to pass into Python. 
 
@@ -127,7 +128,7 @@ cell_metadata <- seu_blood@meta.data[colnames(seu_blood@scale.data), ] %>%
 gene_metadata <- data.frame(gene = rownames(blood_counts))
 ```
 
-# Read data into Python
+## Read data into Python
 
 Using the `reticulate` R package we transfer our raw counts matrix and cell & gene metadata into Python, then create an `AnnData` object. Lastly, we rename some cell metadata features and subset to just the macrophage development lineage. This will simplify our trajectory structure and make choosing a good integration / embedding combination easier. 
 
@@ -150,7 +151,7 @@ ad_blood.var = gene_metadata
 ad_blood
 ```
 
-# Preprocessing
+# Preprocessing {#sec-preprocess}
 
 After removing cells classified as doublets by the original authors, we filter out low-depth cells and genes expressed in less than 10 cells. We then set up a new layer named **counts** containing the raw counts - this is necessary for integration with `scVI`, which takes as input the raw, unnormalized expression estimates. Lastly, we identify 3,000 HVGs and subset our object to just those genes. 
 
@@ -169,7 +170,7 @@ sc.pp.highly_variable_genes(
 )
 ```
 
-# Integration with `scVI`
+# Integration with `scVI` {#sec-scvi}
 
 [Paper](https://doi.org/10.1038/s41592-018-0229-2), [Docs](https://scvi-tools.org)
 
@@ -219,7 +220,7 @@ ad_blood.obsm['X_scVI'] = int_model.get_latent_representation()
 
 ```{python}
 #| code-fold: true
-#| fig-cap: scVI embedding
+#| fig-cap: scVI embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-scvi_embed
@@ -265,7 +266,7 @@ The UMAP embedding is a bit oddly-shaped, but celltypes are well-connected and t
 
 ```{python}
 #| code-fold: true
-#| fig-cap: scVI-based UMAP embedding
+#| fig-cap: scVI-based UMAP embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-umap_embed_scvi
@@ -301,7 +302,7 @@ Similar to the UMAP embedding, the FR embedding is well-connected and the cellty
 
 ```{python}
 #| code-fold: true
-#| fig-cap: scVI-based force-directed graph embedding
+#| fig-cap: scVI-based force-directed graph embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-graph_embed_scvi
@@ -336,7 +337,7 @@ Like the UMAP embedding the diffusion map embedding is pretty angular, but it re
 
 ```{python}
 #| code-fold: true
-#| fig-cap: scVI-based diffusion map embedding
+#| fig-cap: scVI-based diffusion map embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-diffmap_embed_scvi
@@ -353,7 +354,7 @@ plt.gca().set_ylabel('DC 2')
 plt.show()
 ```
 
-# Integration with `Harmony`
+# Integration with `Harmony` {#sec-harmony}
 
 [Paper](https://doi.org/10.1038/s41592-019-0619-0), [Docs](https://github.com/slowkow/harmonypy)
 
@@ -384,7 +385,7 @@ The PCA embedding on its own is alright, and I don't imagine the integration pro
 
 ```{python}
 #| code-fold: true
-#| fig-cap: PCA embedding
+#| fig-cap: PCA embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-pca_embed
@@ -413,7 +414,7 @@ As expected, the corrected PCA space is pretty similar to the original one.
 
 ```{python}
 #| code-fold: true
-#| fig-cap: Harmony embedding
+#| fig-cap: Harmony embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-harmony_embed
@@ -457,7 +458,7 @@ Uh oh - the UMAP embedding displays disconnected clusters of cells. This indicat
 
 ```{python}
 #| code-fold: true
-#| fig-cap: Harmony-based UMAP embedding
+#| fig-cap: Harmony-based UMAP embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-umap_embed_harmony
@@ -491,7 +492,7 @@ The FR embedding shows a disconnected cluster of monocytes as well. In addition,
 
 ```{python}
 #| code-fold: true
-#| fig-cap: Harmony-based force-directed graph embedding
+#| fig-cap: Harmony-based force-directed graph embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-graph_embed_harmony
@@ -524,7 +525,7 @@ The diffusion map embedding is also fairly disconnected and has a tiny outlier c
 
 ```{python}
 #| code-fold: true
-#| fig-cap: Harmony-based diffusion map embedding
+#| fig-cap: Harmony-based diffusion map embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-diffmap_embed_harmony
@@ -541,7 +542,7 @@ plt.gca().set_ylabel('DC 2')
 plt.show()
 ```
 
-# Integration with `BBKNN`
+# Integration with `BBKNN` {#sec-bbknn}
 
 [Paper](https://doi.org/10.1093/bioinformatics/btz625), [Docs](https://github.com/Teichlab/bbknn)
 
@@ -570,7 +571,7 @@ The UMAP is somewhat smoothly-connected, but the biological sequence of celltype
 
 ```{python}
 #| code-fold: true
-#| fig-cap: BBKNN-based UMAP embedding
+#| fig-cap: BBKNN-based UMAP embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-umap_embed_bbknn
@@ -604,7 +605,7 @@ The FR embedding suffers from the same issue.
 
 ```{python}
 #| code-fold: true
-#| fig-cap: BBKNN-based force-directed graph embedding
+#| fig-cap: BBKNN-based force-directed graph embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-graph_embed_bbknn
@@ -637,7 +638,7 @@ The diffusion map embedding also misplaces the monocyte phenotype.
 
 ```{python}
 #| code-fold: true
-#| fig-cap: BBKNN-based diffusion map embedding
+#| fig-cap: BBKNN-based diffusion map embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-diffmap_embed_bbknn
@@ -654,7 +655,7 @@ plt.gca().set_ylabel('DC 2')
 plt.show()
 ```
 
-# Integration with `Scanorama`
+# Integration with `Scanorama` {#sec-scanorama}
 
 [Paper](https://doi.org/10.1038/s41587-019-0113-3), [Docs](https://github.com/brianhie/scanorama)
 
@@ -696,7 +697,7 @@ With UMAP the celltype progression is represented correctly, though the transiti
 
 ```{python}
 #| code-fold: true
-#| fig-cap: Scanorama-based UMAP embedding
+#| fig-cap: Scanorama-based UMAP embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-umap_embed_scanorama
@@ -730,7 +731,7 @@ The FR embedding is a bit worse and isn't very smoothly connected.
 
 ```{python}
 #| code-fold: true
-#| fig-cap: Harmony-based force-directed graph embedding
+#| fig-cap: Scanorama-based force-directed graph embedding colored by celltype.
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-graph_embed_scanorama
@@ -763,7 +764,7 @@ The diffusion map embedding is mostly OK, but there's a weird outlier cluster of
 
 ```{python}
 #| code-fold: true
-#| fig-cap: Scanorama-based diffusion map embedding
+#| fig-cap: Scanorama-based diffusion map embedding colored by celltype. 
 #| fig-width: 6
 #| fig-height: 4
 #| label: fig-diffmap_embed_scanorama
@@ -780,11 +781,11 @@ plt.gca().set_ylabel('DC 2')
 plt.show()
 ```
 
-# Conclusions
+# Conclusions {#sec-conclusions}
 
 Overall, it seems that the `scVI` latent representation of the data performed the best. As for embeddings of that integrated space, I would probably choose the force-directed graph layout, though UMAP also performed well. The primary drawback of this method isn't readily apparent with this dataset - computation time. I've experienced long runtimes (1h+) on even medium-sized datasets of around 25-40k cells. This can make it difficult to experiment and tweak the algorithm's parameters, but overall it tends to perform well without much tuning. As for non-deep learning methods, I would subjectively say that `Scanorama` provided the second-best embeddings, though I've also had good experiences with the R implementation of `Harmony`. As always, it's important to try multiple methods and compare results both visually and quantitatively. 
 
-# Session info
+# Session info {#sec-SI}
 
 ```{r}
 sessioninfo::session_info()

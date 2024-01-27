@@ -1,7 +1,7 @@
 ---
 title: "Investigating Transcription Factor Activity During Neurogenesis"
 author:
-  name: Jack Leary
+  name: Jack R. Leary
   email: j.leary@ufl.edu
   orcid: 0009-0004-8821-3269
   affiliations:
@@ -25,6 +25,7 @@ format:
     df-print: kable
     link-external-newwindow: true
     tbl-cap-location: bottom
+    fig-cap-location: bottom
     number-sections: true
 execute:
   cache: false
@@ -171,7 +172,7 @@ Our `r length(unique(seu_brain$seurat_clusters))` clusters appear to be relative
 #| code-fold: true
 #| fig-width: 6
 #| fig-height: 4
-#| fig-cap: UMAP embedding colored by cluster ID
+#| fig-cap: UMAP embedding colored by cluster ID. 
 #| label: fig-umap_cluster
 p1 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
       mutate(seurat_clusters = seu_brain$seurat_clusters) %>% 
@@ -217,7 +218,7 @@ We visualize the top 5 markers per cluster using a dotplot. Clear expression pat
 #| code-fold: true
 #| fig-width: 5
 #| fig-height: 7
-#| fig-cap: Putative marker genes for each cluster
+#| fig-cap: Putative marker genes for each cluster.
 #| label: fig-dotplot_cluster
 p2 <- DotPlot(seu_brain, 
               features = unique(top5_possible_markers$gene),
@@ -271,7 +272,7 @@ We plot our new celltype labels on our UMAP embedding.
 #| code-fold: true
 #| fig-width: 6
 #| fig-height: 4
-#| fig-cap: UMAP embedding colored by celltype
+#| fig-cap: UMAP embedding colored by celltype.
 #| label: fig-umap_celltype
 p3 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
       mutate(celltype = seu_brain$celltype) %>% 
@@ -313,7 +314,7 @@ The expression trends are clear when visualized.
 #| code-fold: true
 #| fig-width: 4
 #| fig-height: 6
-#| fig-cap: Putative marker genes for each celltype
+#| fig-cap: Putative marker genes for each celltype.
 #| label: fig-dotplot_celltype
 p4 <- DotPlot(seu_brain, 
               features = unique(top5_celltype_markers$gene),
@@ -361,7 +362,7 @@ We can already roughly see how the trajectory will be fit - the root population 
 #| code-fold: true
 #| fig-width: 6
 #| fig-height: 4
-#| fig-cap: UMAP embedding colored by filtered celltypes
+#| fig-cap: UMAP embedding colored by filtered celltypes.
 #| label: fig-umap_celltype_subset
 p5 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
       mutate(celltype = seu_brain$celltype) %>% 
@@ -407,7 +408,7 @@ Above, we created a mean-aggregated pseudotime across all three lineages. This s
 #| code-fold: true
 #| fig-width: 6
 #| fig-height: 4
-#| fig-cap: UMAP embedding colored by mean-aggregated pseudotime
+#| fig-cap: UMAP embedding colored by mean-aggregated pseudotime.
 #| label: fig-umap_mean_PT
 p6 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
       mutate(PT_Overall = seu_brain$PT_Overall) %>% 
@@ -429,7 +430,7 @@ In general, larger pseudotime values are generated for later developmental stage
 #| code-fold: true
 #| fig-width: 6
 #| fig-height: 4
-#| fig-cap: Beeswarm plots of the distribution of mean-aggregated pseudotime for each gestational week
+#| fig-cap: Beeswarm plots of the distribution of mean-aggregated pseudotime for each gestational week.
 #| label: fig-beeswarm_pt
 p7 <- data.frame(PT_Overall = sling_pt$PT_Overall, 
                  week = seu_brain$week) %>% 
@@ -454,7 +455,7 @@ During pseudotime estimation `Slingshot` estimates a minimum spanning tree (MST)
 #| code-fold: true
 #| fig-width: 6
 #| fig-height: 4
-#| fig-cap: UMAP embedding with MST from Slinghot overlaid
+#| fig-cap: UMAP embedding with MST from Slinghot overlaid.
 #| label: fig-umap_MST
 p8 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
       mutate(celltype = seu_brain$celltype) %>% 
@@ -486,7 +487,7 @@ The three lineage seem to correctly identify the developmental relationships we'
 #| code-fold: true
 #| fig-width: 6
 #| fig-height: 6
-#| fig-cap: UMAP embedding colored by lineage-specific pseudotime
+#| fig-cap: UMAP embedding colored by lineage-specific pseudotime.
 #| label: fig-umap_lineage_PT
 p9 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
       bind_cols(sling_pt) %>% 
@@ -526,7 +527,7 @@ We can also plot the principal curves from `Slingshot` on our UMAP embedding. Wh
 #| code-fold: true
 #| fig-width: 6
 #| fig-height: 4
-#| fig-cap: UMAP embedding with principal curves from Slinghot overlaid
+#| fig-cap: UMAP embedding with principal curves from Slinghot overlaid.
 #| label: fig-umap_curves
 p10 <- data.frame(Embeddings(seu_brain, "umap")) %>% 
        mutate(celltype = seu_brain$celltype) %>% 
@@ -570,7 +571,7 @@ After running the `getResultsDE()` function we now have a tidy table of differen
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: Sample DE test output from scLANE
+#| tbl-cap: Sample DE test output from scLANE.
 #| label: tbl-scLANE_output
 select(scLANE_de_res, 
        Gene, 
@@ -599,7 +600,7 @@ Here we visualize the fitted dynamics and knots for three transcription factors 
 #| code-fold: true
 #| fig-width: 8
 #| fig-height: 7
-#| fig-cap: Gene dynamics for three transcription factors of interest
+#| fig-cap: Gene dynamics for three transcription factors of interest.
 #| label: fig-gene_dynamics
 p11 <- getFittedValues(scLANE_models, 
                        genes = c("SOX2", "PAX6", "OLIG1"), 
@@ -705,7 +706,7 @@ The output of the function is rather simple:
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: Sample output displaying per-gene, per-lineage knot locations in pseudotime 
+#| tbl-cap: Sample output displaying per-gene, per-lineage knot locations in pseudotime.
 #| label: tbl-knot_dynamics
 mutate(knot_dist, 
        lineage = case_when(lineage == "Lineage_A" ~ "Excitatory Neuron", 
@@ -724,7 +725,7 @@ We can visualize the differences between lineages using a combination histogram 
 #| message: false
 #| fig-width: 6
 #| fig-height: 6
-#| fig-cap: Empirical distribution of knots across pseudotime for each lineage
+#| fig-cap: Empirical distribution of knots across pseudotime for each lineage.
 #| label: fig-knot_dist
 p12 <- mutate(knot_dist, 
               lineage_label = case_when(lineage == "Lineage_A" ~ "Excitatory Neuron", 
@@ -766,7 +767,7 @@ We can visualize the differing UMAP embeddings, showing heterogeneity across lin
 #| code-fold: true
 #| fig-width: 12
 #| fig-height: 4
-#| fig-cap: Lineage-specific embeddings of gene dynamics
+#| fig-cap: Lineage-specific embeddings of gene dynamics.
 #| label: fig-gene_embeddings
 p13 <- ggplot(gene_embed_neuron, aes(x = umap1, y = umap2, color = leiden)) + 
        geom_point(size = 2, 
@@ -819,7 +820,7 @@ Examining the top biological processes enriched in each lineage gives us some id
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: Top 5 GO:BP terms for the dynamic genes from each lineage
+#| tbl-cap: The top-5 GO:BP terms for the dynamic genes from each lineage.
 #| label: tbl-top5_go_terms
 top5_terms <- filter(enrich_neuron$result, source == "GO:BP") %>% 
               mutate(lineage = "Interneuron", .before = 1) %>% 
@@ -850,7 +851,7 @@ We see several terms significantly enriched in the lineage that are specific to 
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: Significantly enriched OPC-related biological process
+#| tbl-cap: Significantly enriched OPC-related biological process. 
 #| label: tbl-opc_go_terms
 filter(spec_terms_opc, grepl("oligodendrocyte", term_name)) %>% 
   select(lineage, term_name, p_value) %>% 

@@ -1,7 +1,7 @@
 ---
 title: "Building a Trajectory Regulatory Network with scRNA-seq Data"
 author:
-  name: Jack Leary
+  name: Jack R. Leary
   email: j.leary@ufl.edu
   orcid: 0009-0004-8821-3269
   affiliations:
@@ -24,6 +24,7 @@ format:
     fig-height: 6
     df-print: kable
     link-external-newwindow: true
+    fig-cap-location: bottom
     tbl-cap-location: bottom
     number-sections: true
 execute:
@@ -172,7 +173,7 @@ Here we examine some of our dataset's attributes - the original celltype annotat
 #| code-fold: true
 #| fig-width: 10
 #| fig-height: 6
-#| fig-cap: Characteristics of the cortical development dataset
+#| fig-cap: Characteristics of the cortical development dataset.
 #| label: fig-EDA
 p1 <- DimPlot(seu_cortex, 
               group.by = "celltype_original",
@@ -247,7 +248,7 @@ We visualize the markers for each cluster with a dotplot, which shows clear diff
 #| code-fold: true
 #| fig-width: 5
 #| fig-height: 7
-#| fig-cap: Putative marker genes for each cluster
+#| fig-cap: Putative marker genes for each cluster.
 #| label: fig-dotplot_cluster
 p6 <- DotPlot(seu_cortex, 
               features = unique(top5_cluster_markers$gene),
@@ -287,7 +288,7 @@ The markers seem consistent with what we'd expect for excitatory neurons; for mo
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: The top 3 markers genes for each identified celltype
+#| tbl-cap: The top-3 markers genes for each identified celltype.
 #| label: tbl-celltype_markers
 select(top3_celltype_markers, 
        celltype = cluster, 
@@ -329,7 +330,7 @@ The graph structure estimate by `slingshot` is called a minimum spanning tree (M
 #| code-fold: true
 #| fig-width: 6
 #| fig-height: 4
-#| fig-cap: UMAP embedding with MST from Slinghot overlaid
+#| fig-cap: UMAP embedding with MST from Slinghot overlaid.
 #| label: fig-umap_MST
 p7 <- data.frame(Embeddings(seu_cortex, "umap")) %>% 
       mutate(leiden = seu_cortex$seurat_clusters) %>% 
@@ -359,7 +360,7 @@ Since our data have real-life experimental timepoints, it makes sense to normali
 #| code-fold: true
 #| fig-width: 6
 #| fig-height: 6
-#| fig-cap: UMAP embedding colored by per-lineage pseudotime
+#| fig-cap: UMAP embedding colored by per-lineage pseudotime.
 #| label: fig-umap_lineage_PT
 p8 <- data.frame(Embeddings(seu_cortex, "umap")) %>% 
       bind_cols(sling_pt) %>% 
@@ -383,7 +384,7 @@ The principal curves show a trifurcating lineage structure.
 #| code-fold: true
 #| fig-width: 6
 #| fig-height: 4
-#| fig-cap: UMAP embedding with principal curves from Slinghot overlaid in black
+#| fig-cap: UMAP embedding with principal curves from Slinghot overlaid in black.
 #| label: fig-umap_curves
 p9 <- data.frame(Embeddings(seu_cortex, "umap")) %>% 
       mutate(leiden = seu_cortex$seurat_clusters) %>% 
@@ -409,7 +410,7 @@ Lastly, we plot the distribution of mean-aggregated pseudotime per-timepoint and
 #| code-fold: true
 #| fig-width: 8
 #| fig-height: 5
-#| fig-cap: Beeswarm plot displaying the distribution of mean-aggregated pseudotime for each timepoint
+#| fig-cap: Beeswarm plot displaying the distribution of mean-aggregated pseudotime for each timepoint.
 #| label: fig-PCW_PT
 p10 <- select(seu_cortex@meta.data, 
               Age_in_Weeks, 
@@ -453,7 +454,7 @@ We now have lineage-specific trajectory DE statistics for each gene:
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: Top-10 most DE genes from scLANE
+#| tbl-cap: The top-10 most DE genes from scLANE.
 #| label: tbl-scLANE_output
 select(scLANE_de_res, 
        Gene, 
@@ -493,12 +494,14 @@ smoothed_counts <- smoothedCountsMatrix(scLANE_models,
 
 ## Constructing a GRN from scratch
 
-Building a GRN requires two main inputs - a set of transcription factors, and a set of potential target genes. 
+Building a GRN requires two main inputs - a set of transcription factors, and a set of potential target genes. We load a database of TFs from [Lambert *et al* (2018)](https://doi.org/10.1016/j.cell.2018.01.029). 
 
 ```{r}
 #| message: false
 #| warning: false
-hs_ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+hs_ensembl <- useMart("ensembl",
+                      dataset = "hsapiens_gene_ensembl", 
+                      host = "https://useast.ensembl.org")
 hs_tf_raw <- readr::read_csv("http://humantfs.ccbr.utoronto.ca/download/v_1.01/DatabaseExtract_v_1.01.csv",
                              col_select = -1,
                              num_threads = 2L,
@@ -522,7 +525,7 @@ Along with the HGNC symbol, we used `BiomaRt` to retrieve the Ensembl & Entrez I
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: Human transcription factors
+#| tbl-cap: Human transcription factors.
 #| label: tbl-TFs
 slice_sample(hs_tfs, n = 10) %>% 
   kableExtra::kbl(booktabs = TRUE, 
@@ -530,20 +533,20 @@ slice_sample(hs_tfs, n = 10) %>%
   kableExtra::kable_classic(full_width = FALSE, "hover")
 ```
 
-We split our set of `r length(dyn_genes)` trajectory DE genes into the two categories using the existing set of human TFs I found online. 
+We split our set of `r length(dyn_genes)` trajectory DE genes into the two categories: TFs and target genes. 
 
 ```{r}
 valid_hs_tfs <- hs_tfs$hgnc_symbol[hs_tfs$hgnc_symbol %in% dyn_genes]
 target_genes <- dyn_genes[!dyn_genes %in% valid_hs_tfs]
 ```
 
-The GRN has the following structure - for every target gene, a penalized model is fit with the dynamics of every possible TF as features (see below). The model's internal feature selection identifies a subset of TFs whose dynamics are predictive of the target gene's dynamics. See e.g., [the original XGBoost paper](https://doi.org/10.48550/arXiv.1603.02754) for details. 
+The GRN has the following structure - for every target gene, a penalized model is fit with the dynamics of every possible TF as features (see below). We use the Gamma distribution with log link as our regression objective as the dynamics are continuous and strictly non-negative. The model's internal regularization identifies a subset of TFs whose dynamics are predictive of the target gene's dynamics. See e.g., [the original XGBoost paper](https://doi.org/10.48550/arXiv.1603.02754) for details. 
 
 $$
 \text{Dynamics}_{\text{Target}} = \begin{bmatrix} \text{Dynamics}_{\text{TF}_1} & \text{Dynamics}_{\text{TF}_2} & \dots & \text{Dynamics}_{\text{TF}_N} \end{bmatrix}
 $$ {#eq-XGBoost}
 
-Our GRNs will be lineage-specific, since the matrix of gene dynamics differs by lineage. First we fit the GRN for lineage A; I've opted to use the `LightGBM` package to fit the models as it's lightweight and in general much faster than other options such as `XGBoost`. In addition, I prefer this method to alternative penalized methods such as LASSO - boosted trees better capture nonlinearities in the data, though LASSO does offer advantages such as significance testing for coefficients and linear interpretability. Both methods have built-in cross-validation (CV) routines (`lightgbm::lgb.cv()` and `glmnet::cv.glmnet()`, respectively); here we use 5-fold CV to select the best set of hyperparameters before training the final model. 
+Our GRNs will be lineage-specific, since the matrix of gene dynamics differs by lineage. First we fit the GRN for lineage A; I've opted to use the `LightGBM` package to fit the models as it's lightweight and in general much faster than other options such as `XGBoost`. In addition, I prefer this method to alternative penalized methods such as LASSO - boosted trees better capture nonlinearities in the data, though LASSO does offer advantages such as significance testing for coefficients and linear interpretability. Both methods have built-in cross-validation (CV) routines (`lightgbm::lgb.cv()` and `glmnet::cv.glmnet()`, respectively); here we use 5-fold CV to select the best set of hyperparameters before training the final model. Lastly, instead of the default booster we utilize a DART booster, which purports to improve on [the overspecialization problem](https://xgboost.readthedocs.io/en/stable/tutorials/dart.html) suffered by the default booster - see [the DART preprint](https://doi.org/10.48550/arXiv.1505.01866) for details. 
 
 ::: {.callout-note}
 Since we're using the `foreach` and `doSNOW` packages to loop over the set of target genes in parallel, we need to ensure that our `LightGBM` model only uses a single thread when fitting the model. This is done by setting the parameters `tree_learner = "serial"` and `num_threads = 1L` in the model parameters list. 
@@ -557,8 +560,9 @@ doSNOW::registerDoSNOW(cl)
 lgbm_params <- list(objective = "gamma", 
                     tree_learner = "serial", 
                     metric = "l2", 
-                    boosting_type = "gbdt", 
+                    boosting = "dart", 
                     num_threads = 1L, 
+                    device_type = "cpu",
                     seed = 312)
 grn_res_linA <- foreach(g = seq(target_genes), 
                         .combine = "list",
@@ -601,17 +605,29 @@ grn_table_linA <- purrr::imap(grn_res_linA, \(x, y) {
 })
 ```
 
-We coerce the model output into a tidy table. 
+We coerce the model output into a tidy table. The two importance metrics we're interested in are gain (the improvement in L2 loss of a certain TF) and frequency (the proportion of times a TF was included in the model). For more information see [this StackExchange post](https://datascience.stackexchange.com/questions/12318/how-to-interpret-the-output-of-xgboost-importance) or [the XGBoost docs](https://xgboost.readthedocs.io/en/stable/R-package/discoverYourData.html#measure-feature-importance). As such, we calculate the rank of each target gene for gain and frequency, then mean-aggregate the two ranks in order to produce an average rank of how relatively strong the relationship between each TF & target gene is. 
 
 ```{r}
 grn_table_linA <- purrr::reduce(grn_table_linA, rbind) %>% 
+                  select(-Cover) %>% 
                   rename(Tx_Factor = Feature) %>% 
                   filter(!is.na(Target_Gene), 
                          !is.na(Tx_Factor)) %>% 
-                  arrange(Tx_Factor, desc(Frequency))
+                  arrange(Tx_Factor, desc(Frequency)) %>% 
+                  with_groups(Tx_Factor, 
+                              mutate, 
+                              Frequency_Rank = row_number()) %>% 
+                  arrange(Tx_Factor, desc(Gain)) %>% 
+                  with_groups(Tx_Factor, 
+                              mutate, 
+                              Gain_Rank = row_number()) %>% 
+                  rowwise() %>% 
+                  mutate(Mean_Rank = mean(c_across(c(Frequency_Rank, Gain_Rank)))) %>% 
+                  ungroup() %>% 
+                  arrange(Tx_Factor, Mean_Rank)
 ```
 
-Next we add the Spearman correlation between TF and target gene dynamics, as well as the normalized gene expression correlation. We denote the relationship between TF and target gene as repression if the correlation between their dynamics is negative, and activation if the correlation is positive. 
+Next we add the Spearman correlation and mutual information (MI) between TF and target gene dynamics, as well as the normalized gene expression correlation and MI. We denote the relationship between TF and target gene as repression if the correlation between their dynamics is negative, and activation if the correlation is positive. 
 
 ::: {.callout-warning}
 Usually the correlations between TF and target dynamics and TF and target expression are similar, or at least have the same directionality (positive or negative). However, when expression patterns are noisy, the correlation directions might differ (see @tbl-GRN_linA for examples). In this case, we're opting to trust the dynamics more, as they are a smoothed version of expression - though an argument could be made for the opposite stance as well. 
@@ -619,35 +635,50 @@ Usually the correlations between TF and target dynamics and TF and target expres
 
 ```{r}
 dyn_cormat <- cor(smoothed_counts$Lineage_A, method = "spearman")
-exp_cormat <- cor(as.matrix(Matrix::t(seu_cortex@assays$RNA$data[dyn_genes, ])), method = "spearman")
+dyn_mimat <- minet::build.mim(smoothed_counts$Lineage_A, 
+                              estimator = "mi.empirical", 
+                              disc = "equalwidth")
+exp_cormat <- cor(as.matrix(Matrix::t(seu_cortex@assays$RNA$data[dyn_genes, which(!is.na(sling_pt$Lineage1))])), method = "spearman")
+exp_mimat <- minet::build.mim(as.matrix(Matrix::t(seu_cortex@assays$RNA$data[dyn_genes, which(!is.na(sling_pt$Lineage1))])),  
+                              estimator = "mi.empirical", 
+                              disc = "equalwidth")
 grn_table_linA <- mutate(grn_table_linA, 
                          Dyn_Cor = NA_real_, 
-                         Exp_Cor = NA_real_)
+                         Exp_Cor = NA_real_, 
+                         Dyn_MI = NA_real_, 
+                         Exp_MI = NA_real_)
 for (i in seq(nrow(grn_table_linA))) {
   grn_table_linA$Dyn_Cor[i] <- dyn_cormat[grn_table_linA$Target_Gene[i], grn_table_linA$Tx_Factor[i]]
+  grn_table_linA$Dyn_MI[i] <- dyn_mimat[grn_table_linA$Target_Gene[i], grn_table_linA$Tx_Factor[i]]
   grn_table_linA$Exp_Cor[i] <- exp_cormat[grn_table_linA$Target_Gene[i], grn_table_linA$Tx_Factor[i]]
+  grn_table_linA$Exp_MI[i] <- exp_mimat[grn_table_linA$Target_Gene[i], grn_table_linA$Tx_Factor[i]]
 }
 grn_table_linA <- mutate(grn_table_linA, State = if_else(Dyn_Cor < 0, "Repression", "Activation"))
 ```
 
-The output is shown below. Here we use the frequency with which the TF is included in the final boosted tree model as the feature importance, which can be interpreted as the strength of the predictive relationship between TF & target gene. See e.g., [this StackExchange post](https://datascience.stackexchange.com/questions/12318/how-to-interpret-the-output-of-xgboost-importance) for more detail.  
+The output is shown below. Interestingly, the mutual information seems to be generally higher for the dynamics than for expression - this indicates that our usage of the dynamics as a de-noising technique for the GRN might be working well. 
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: GRN for dynamic genes across Lineage A
+#| tbl-cap: GRN for dynamic genes across Lineage A.
 #| label: tbl-GRN_linA
 select(grn_table_linA, 
        Lineage, 
        Tx_Factor, 
        Target_Gene, 
+       Gain, 
        Frequency, 
+       Mean_Rank, 
        Dyn_Cor, 
        Exp_Cor, 
+       Dyn_MI, 
+       Exp_MI,
        State) %>% 
   slice_sample(n = 10) %>% 
-  kableExtra::kbl(digits = 4, 
+  kableExtra::kbl(digits = 3, 
                   booktabs = TRUE, 
-                  col.names = c("Lineage", "TF", "Target", "Importance", "Dynamics cor.", "Expression cor.", "State")) %>% 
+                  col.names = c("Lineage", "TF", "Target", "Gain", "Frequency", "Mean rank", 
+                                "Dynamics cor.", "Expression cor.", "Dynamics MI", "Expression MI", "State")) %>% 
   kableExtra::kable_classic(full_width = FALSE, "hover")
 ```
 
@@ -697,17 +728,40 @@ grn_table_linB <- purrr::imap(grn_res_linB, \(x, y) {
   }
 })
 grn_table_linB <- purrr::reduce(grn_table_linB, rbind) %>% 
+                  select(-Cover) %>% 
                   rename(Tx_Factor = Feature) %>% 
                   filter(!is.na(Target_Gene), 
                          !is.na(Tx_Factor)) %>% 
-                  arrange(Tx_Factor, desc(Frequency))
+                  arrange(Tx_Factor, desc(Frequency)) %>% 
+                  with_groups(Tx_Factor, 
+                              mutate, 
+                              Frequency_Rank = row_number()) %>% 
+                  arrange(Tx_Factor, desc(Gain)) %>% 
+                  with_groups(Tx_Factor, 
+                              mutate, 
+                              Gain_Rank = row_number()) %>% 
+                  rowwise() %>% 
+                  mutate(Mean_Rank = mean(c_across(c(Frequency_Rank, Gain_Rank)))) %>% 
+                  ungroup() %>% 
+                  arrange(Tx_Factor, Mean_Rank)
 dyn_cormat <- cor(smoothed_counts$Lineage_B, method = "spearman")
+dyn_mimat <- minet::build.mim(smoothed_counts$Lineage_B, 
+                              estimator = "mi.empirical", 
+                              disc = "equalwidth")
+exp_cormat <- cor(as.matrix(Matrix::t(seu_cortex@assays$RNA$data[dyn_genes, which(!is.na(sling_pt$Lineage2))])), method = "spearman")
+exp_mimat <- minet::build.mim(as.matrix(Matrix::t(seu_cortex@assays$RNA$data[dyn_genes, which(!is.na(sling_pt$Lineage2))])),  
+                              estimator = "mi.empirical", 
+                              disc = "equalwidth")
 grn_table_linB <- mutate(grn_table_linB, 
                          Dyn_Cor = NA_real_, 
-                         Exp_Cor = NA_real_)
+                         Exp_Cor = NA_real_, 
+                         Dyn_MI = NA_real_, 
+                         Exp_MI = NA_real_)
 for (i in seq(nrow(grn_table_linB))) {
   grn_table_linB$Dyn_Cor[i] <- dyn_cormat[grn_table_linB$Target_Gene[i], grn_table_linB$Tx_Factor[i]]
+  grn_table_linB$Dyn_MI[i] <- dyn_mimat[grn_table_linB$Target_Gene[i], grn_table_linB$Tx_Factor[i]]
   grn_table_linB$Exp_Cor[i] <- exp_cormat[grn_table_linB$Target_Gene[i], grn_table_linB$Tx_Factor[i]]
+  grn_table_linB$Exp_MI[i] <- exp_mimat[grn_table_linB$Target_Gene[i], grn_table_linB$Tx_Factor[i]]
 }
 grn_table_linB <- mutate(grn_table_linB, State = if_else(Dyn_Cor < 0, "Repression", "Activation"))
 grn_res_linC <- foreach(g = seq(target_genes), 
@@ -750,17 +804,40 @@ grn_table_linC <- purrr::imap(grn_res_linC, \(x, y) {
   }
 })
 grn_table_linC <- purrr::reduce(grn_table_linC, rbind) %>% 
+                  select(-Cover) %>% 
                   rename(Tx_Factor = Feature) %>% 
                   filter(!is.na(Target_Gene), 
                          !is.na(Tx_Factor)) %>% 
-                  arrange(Tx_Factor, desc(Frequency))
+                  arrange(Tx_Factor, desc(Frequency)) %>% 
+                  with_groups(Tx_Factor, 
+                              mutate, 
+                              Frequency_Rank = row_number()) %>% 
+                  arrange(Tx_Factor, desc(Gain)) %>% 
+                  with_groups(Tx_Factor, 
+                              mutate, 
+                              Gain_Rank = row_number()) %>% 
+                  rowwise() %>% 
+                  mutate(Mean_Rank = mean(c_across(c(Frequency_Rank, Gain_Rank)))) %>% 
+                  ungroup() %>% 
+                  arrange(Tx_Factor, Mean_Rank)
 dyn_cormat <- cor(smoothed_counts$Lineage_C, method = "spearman")
+dyn_mimat <- minet::build.mim(smoothed_counts$Lineage_C, 
+                              estimator = "mi.empirical", 
+                              disc = "equalwidth")
+exp_cormat <- cor(as.matrix(Matrix::t(seu_cortex@assays$RNA$data[dyn_genes, which(!is.na(sling_pt$Lineage3))])), method = "spearman")
+exp_mimat <- minet::build.mim(as.matrix(Matrix::t(seu_cortex@assays$RNA$data[dyn_genes, which(!is.na(sling_pt$Lineage3))])),  
+                              estimator = "mi.empirical", 
+                              disc = "equalwidth")
 grn_table_linC <- mutate(grn_table_linC, 
                          Dyn_Cor = NA_real_, 
-                         Exp_Cor = NA_real_)
+                         Exp_Cor = NA_real_, 
+                         Dyn_MI = NA_real_, 
+                         Exp_MI = NA_real_)
 for (i in seq(nrow(grn_table_linC))) {
   grn_table_linC$Dyn_Cor[i] <- dyn_cormat[grn_table_linC$Target_Gene[i], grn_table_linC$Tx_Factor[i]]
+  grn_table_linC$Dyn_MI[i] <- dyn_mimat[grn_table_linC$Target_Gene[i], grn_table_linC$Tx_Factor[i]]
   grn_table_linC$Exp_Cor[i] <- exp_cormat[grn_table_linC$Target_Gene[i], grn_table_linC$Tx_Factor[i]]
+  grn_table_linC$Exp_MI[i] <- exp_mimat[grn_table_linC$Target_Gene[i], grn_table_linC$Tx_Factor[i]]
 }
 grn_table_linC <- mutate(grn_table_linC, State = if_else(Dyn_Cor < 0, "Repression", "Activation"))
 parallel::stopCluster(cl)
@@ -772,7 +849,9 @@ We collate all three GRNs into a single overall table:
 grn_table_all <- bind_rows(grn_table_linA, 
                            grn_table_linB, 
                            grn_table_linC) %>% 
-                 arrange(Tx_Factor, Target_Gene)
+                 arrange(Lineage, 
+                         Tx_Factor, 
+                         Mean_Rank)
 ```
 
 For each lineage we create a directed, weighted graph of the relationships between TFs and target genes using the `igraph` package. 
@@ -781,9 +860,12 @@ For each lineage we create a directed, weighted graph of the relationships betwe
 graph_df_linA <- select(grn_table_linA, 
                         Tx_Factor, 
                         Target_Gene,
+                        Mean_Rank, 
                         Frequency, 
+                        Gain, 
+                        Dyn_MI, 
                         State) %>% 
-                 arrange(Tx_Factor, desc(Frequency)) %>% 
+                 arrange(Tx_Factor, Mean_Rank) %>% 
                  with_groups(Tx_Factor,
                              slice_head, 
                              n = 10)
@@ -791,9 +873,12 @@ graph_obj_linA <- graph.data.frame(graph_df_linA, directed = TRUE)
 graph_df_linB <- select(grn_table_linB, 
                         Tx_Factor, 
                         Target_Gene,
+                        Mean_Rank, 
                         Frequency, 
+                        Gain, 
+                        Dyn_MI, 
                         State) %>% 
-                 arrange(Tx_Factor, desc(Frequency)) %>% 
+                 arrange(Tx_Factor, Mean_Rank) %>% 
                  with_groups(Tx_Factor,
                              slice_head, 
                              n = 10)
@@ -801,9 +886,12 @@ graph_obj_linB <- graph.data.frame(graph_df_linB, directed = TRUE)
 graph_df_linC <- select(grn_table_linC, 
                         Tx_Factor, 
                         Target_Gene,
+                        Mean_Rank, 
                         Frequency, 
+                        Gain, 
+                        Dyn_MI, 
                         State) %>% 
-                 arrange(Tx_Factor, desc(Frequency)) %>% 
+                 arrange(Tx_Factor, Mean_Rank) %>% 
                  with_groups(Tx_Factor,
                              slice_head, 
                              n = 10)
@@ -816,84 +904,90 @@ One TF of particular interest is SRY-box transcription factor 4 (*SOX4*). This T
 #| code-fold: true
 #| fig-width: 10
 #| fig-height: 15
-#| fig-cap: Fruchterman-Reingold embeddings of the relationships between SRY-box transcription factor 4 and lineage-specific target genes
+#| fig-cap: Fruchterman-Reingold embeddings of the relationships between SRY-box transcription factor 4 and lineage-specific target genes. Lines are weighted & shaded by the mutual information score between TF & target gene dynamics that we computed earlier. 
 #| label: fig-FR_embed
-set.seed(1)
-freqs <- purrr::map(list(graph_df_linA, graph_df_linB, graph_df_linC), \(x) {
+set.seed(12)
+MIs <- purrr::map(list(graph_df_linA, graph_df_linB, graph_df_linC), \(x) {
   filter(x, Tx_Factor == "SOX4") %>% 
-  pull(Frequency)
+  pull(Dyn_MI)
 })
-freq_min <- min(purrr::reduce(freqs, c))
-freq_max <- max(purrr::reduce(freqs, c))
+MI_min <- min(purrr::reduce(MIs, c))
+MI_max <- max(purrr::reduce(MIs, c))
 p11 <- fortify(graph_obj_linA, 
                layout = layout_with_fr(graph = graph_obj_linA, 
                                        grid = "nogrid", 
-                                       weights = E(graph_obj_linA)$weights^3),
-               arrow.gap = .02) %>% 
+                                       weights = E(graph_obj_linA)$weights^2),
+               arrow.gap = .015) %>% 
        mutate(Gene_Type = if_else(name %in% hs_tfs$hgnc_symbol, "TF", "Target Gene")) %>% 
        filter(name %in% (filter(graph_df_linA, Tx_Factor == "SOX4") %>% pull(Target_Gene)) | name == "SOX4") %>% 
        ggplot(aes(x = x, y = y, xend = xend, yend = yend)) + 
        facet_wrap(~"Lineage A") + 
-       geom_edges(aes(linewidth = Frequency, alpha = Frequency, color = State), 
+       geom_edges(aes(linewidth = Dyn_MI, alpha = Dyn_MI, color = State), 
                   arrow = arrow(length = unit(8, "pt"), type = "closed")) + 
        geom_nodelabel(aes(label = name, fill = Gene_Type), 
                       size = 5) + 
        scale_color_manual(values = c("forestgreen", "firebrick")) + 
        scale_fill_manual(values = c("darkorange2", "dodgerblue3")) + 
-       scale_linewidth_continuous(range = c(0.5, 1.5), limits = c(freq_min, freq_max)) + 
-       scale_alpha_continuous(range = c(0.75, 1), limits = c(freq_min, freq_max)) + 
+       scale_linewidth_continuous(range = c(0.5, 1.5), limits = c(MI_min, MI_max)) + 
+       scale_alpha_continuous(range = c(0.75, 1), limits = c(MI_min, MI_max)) + 
        labs(x = "FR 1", 
             y = "FR 2", 
             color = "TF State", 
-            fill = "Gene Type") + 
+            fill = "Gene Type", 
+            linewidth = "Mutual Information", 
+            alpha = "Mutual Information") + 
        theme_scLANE(umap = TRUE) + 
        guides(fill = guide_legend(override.aes = list(label = ""), order = 1), 
               color = guide_legend(order = 2))
 p12 <- fortify(graph_obj_linB, 
                layout = layout_with_fr(graph = graph_obj_linB, 
                                        grid = "nogrid", 
-                                       weights = E(graph_obj_linB)$weights^3),
-               arrow.gap = .02) %>% 
+                                       weights = E(graph_obj_linB)$weights^2),
+               arrow.gap = .015) %>% 
        mutate(Gene_Type = if_else(name %in% hs_tfs$hgnc_symbol, "TF", "Target Gene")) %>% 
        filter(name %in% (filter(graph_df_linB, Tx_Factor == "SOX4") %>% pull(Target_Gene)) | name == "SOX4") %>% 
        ggplot(aes(x = x, y = y, xend = xend, yend = yend)) + 
        facet_wrap(~"Lineage B") + 
-       geom_edges(aes(linewidth = Frequency, alpha = Frequency, color = State), 
+       geom_edges(aes(linewidth = Dyn_MI, alpha = Dyn_MI, color = State), 
                   arrow = arrow(length = unit(8, "pt"), type = "closed")) + 
        geom_nodelabel(aes(label = name, fill = Gene_Type), 
                       size = 5) + 
        scale_color_manual(values = c("forestgreen", "firebrick")) + 
        scale_fill_manual(values = c("darkorange2", "dodgerblue3")) + 
-       scale_linewidth_continuous(range = c(0.5, 1.5), limits = c(freq_min, freq_max)) + 
-       scale_alpha_continuous(range = c(0.75, 1), limits = c(freq_min, freq_max)) + 
+       scale_linewidth_continuous(range = c(0.5, 1.5), limits = c(MI_min, MI_max)) + 
+       scale_alpha_continuous(range = c(0.75, 1), limits = c(MI_min, MI_max)) + 
        labs(x = "FR 1", 
             y = "FR 2", 
             color = "TF State", 
-            fill = "Gene Type") + 
+            fill = "Gene Type", 
+            linewidth = "Mutual Information", 
+            alpha = "Mutual Information") + 
        theme_scLANE(umap = TRUE) + 
        guides(fill = guide_legend(override.aes = list(label = ""), order = 1), 
               color = guide_legend(order = 2))
 p13 <- fortify(graph_obj_linC, 
                layout = layout_with_fr(graph = graph_obj_linC, 
                                        grid = "nogrid", 
-                                       weights = E(graph_obj_linC)$weights^3),
-               arrow.gap = .02) %>% 
+                                       weights = E(graph_obj_linC)$weights^2),
+               arrow.gap = .015) %>% 
        mutate(Gene_Type = if_else(name %in% hs_tfs$hgnc_symbol, "TF", "Target Gene")) %>% 
        filter(name %in% (filter(graph_df_linC, Tx_Factor == "SOX4") %>% pull(Target_Gene)) | name == "SOX4") %>% 
        ggplot(aes(x = x, y = y, xend = xend, yend = yend)) + 
        facet_wrap(~"Lineage C") + 
-       geom_edges(aes(linewidth = Frequency, alpha = Frequency, color = State), 
+       geom_edges(aes(linewidth = Dyn_MI, alpha = Dyn_MI, color = State), 
                   arrow = arrow(length = unit(8, "pt"), type = "closed")) + 
        geom_nodelabel(aes(label = name, fill = Gene_Type), 
                       size = 5) + 
        scale_color_manual(values = c("forestgreen", "firebrick")) + 
        scale_fill_manual(values = c("darkorange2", "dodgerblue3")) + 
-       scale_linewidth_continuous(range = c(0.5, 1.5), limits = c(freq_min, freq_max)) + 
-       scale_alpha_continuous(range = c(0.75, 1), limits = c(freq_min, freq_max)) + 
+       scale_linewidth_continuous(range = c(0.5, 1.5), limits = c(MI_min, MI_max)) + 
+       scale_alpha_continuous(range = c(0.75, 1), limits = c(MI_min, MI_max)) + 
        labs(x = "FR 1", 
             y = "FR 2", 
             color = "TF State", 
-            fill = "Gene Type") + 
+            fill = "Gene Type", 
+            linewidth = "Mutual Information", 
+            alpha = "Mutual Information") + 
        theme_scLANE(umap = TRUE) + 
        guides(fill = guide_legend(override.aes = list(label = ""), order = 1), 
               color = guide_legend(order = 2))
@@ -903,14 +997,14 @@ p14
 
 # Conclusions {#sec-conclusions}
 
-Hopefully this analysis has demonstrated the utility of trajectory GRNs for comparing gene dynamics across lineages. Beyond just visual comparison of how gene expression changes over pseudotime, trajectory GRNs allow us to identify which transcription factors are activating or suppressing target genes, how top TF targets differ between lineages, and the ways in which TF-target relationships change based on the cell fate towards which cells are progressing. To conclude, I've written up the methodology for creating a trajectory GRN into a function, which is shown in the code block below. It includes functionality for a progress bar if desired, and takes as input a matrix of gene dynamics (`expr.mat`), a set of dynamic genes (`dyn.genes`), and a set of transcription factors (`tx.factors`). Eventually I plan to expand this functionality and turn it into an R package, but for now it'll stay a simple function. 
+Hopefully this analysis has demonstrated the utility of trajectory GRNs for comparing gene dynamics across lineages. Beyond just visual comparison of how gene expression changes over pseudotime, trajectory GRNs allow us to identify which transcription factors are activating or suppressing target genes, how top TF targets differ between lineages, and the ways in which TF-target relationships change based on the cell fate towards which cells are progressing. To conclude, I've written up the methodology for creating a trajectory GRN into a function, which is shown in the code block below. It includes functionality for a progress bar if desired, and takes as input matrices of gene dynamics (`dyn.mat`) and normalized expression (`expr.mat`), a set of dynamic genes (`dyn.genes`), and a set of transcription factors (`tx.factors`). Eventually I plan to expand this functionality and turn it into an R package, but for now it'll stay a simple function. 
 
 ```{r}
 #| code-fold: true
-estimateTGRN <- function(expr.mat = NULL,
+estimateTGRN <- function(dyn.mat = NULL,
+                         expr.mat = NULL, 
                          dyn.genes = NULL, 
                          tx.factors = NULL, 
-                         log1p.norm = TRUE,
                          cor.method = "spearman",
                          n.cores = 4L, 
                          verbose = TRUE, 
@@ -920,11 +1014,7 @@ estimateTGRN <- function(expr.mat = NULL,
   # ID non-TF genes & filter out non-dynamic TFs
   target_genes <- dyn.genes[!dyn.genes %in% tx.factors]
   tx.factors <- tx.factors[tx.factors %in% dyn.genes]
-  # normalize matrix of dynamics
-  if (log1p.norm) {
-    expr.mat <- log1p(expr.mat)
-  }
-  # set up progress bar
+  # set up progress bar if desired
   if (verbose) {
     withr::with_output_sink(tempfile(), {
       pb <- utils::txtProgressBar(0, length(target_genes), style = 3)
@@ -936,7 +1026,7 @@ estimateTGRN <- function(expr.mat = NULL,
   }
   # set up parallel processing
   if (n.cores > 1L) {
-    cl <- parallel::makeCluster(6L)
+    cl <- parallel::makeCluster(n.cores)
     doSNOW::registerDoSNOW(cl)
   } else {
     cl <- foreach::registerDoSEQ()
@@ -945,7 +1035,8 @@ estimateTGRN <- function(expr.mat = NULL,
   lgbm_params <- list(objective = "gamma", 
                       tree_learner = "serial", 
                       metric = "l2", 
-                      boosting_type = "gbdt", 
+                      boosting_type = "dart",
+                      device = "cpu",
                       num_threads = 1L, 
                       seed = random.seed)
   # estimate trajectory GRN
@@ -959,8 +1050,8 @@ estimateTGRN <- function(expr.mat = NULL,
                               .inorder = TRUE,
                               .verbose = FALSE,
                               .options.snow = snow_opts) %dopar% {
-                                feature_mat <- expr.mat[, tx.factors]
-                                resp_var <- expr.mat[, target_genes[g]]
+                                feature_mat <- dyn.mat[, tx.factors]
+                                resp_var <- dyn.mat[, target_genes[g]]
                                 lgbm_data <- lightgbm::lgb.Dataset(data = feature_mat, label = resp_var)
                                 lgbm_cv <- lightgbm::lgb.cv(params = lgbm_params, 
                                                             data = lgbm_data, 
@@ -991,15 +1082,43 @@ estimateTGRN <- function(expr.mat = NULL,
       return(x)
     }
   })
+  # add mean rank of gain & frequency
   grn_table <- purrr::reduce(grn_table, rbind) %>% 
+               dplyr::select(-Cover) %>% 
                dplyr::rename(Tx_Factor = Feature) %>% 
                dplyr::filter(!is.na(Target_Gene), 
-                             !is.na(Tx_Factor))
-  # add correlation b/t TF and each target gene 
-  dyn_cormat <- stats::cor(expr.mat[, dyn.genes], method = cor.method)
-  grn_table <- dplyr::mutate(grn_table, Dyn_Cor = NA_real_)
+                             !is.na(Tx_Factor)) %>% 
+               dplyr::arrange(Tx_Factor, desc(Frequency)) %>% 
+               dplyr::with_groups(Tx_Factor, 
+                                  dplyr::mutate, 
+                                  Frequency_Rank = row_number()) %>% 
+               dplyr::arrange(Tx_Factor, desc(Gain)) %>% 
+               dplyr::with_groups(Tx_Factor, 
+                                  dplyr::mutate, 
+                                  Gain_Rank = row_number()) %>% 
+               dplyr::rowwise() %>% 
+               dplyr::mutate(Mean_Rank = mean(dplyr::c_across(c(Frequency_Rank, Gain_Rank)))) %>% 
+               dplyr::ungroup() %>% 
+               dplyr::arrange(Tx_Factor, Mean_Rank)
+  # add correlation & mutual information b/t TF and each target gene (dynamics and normalized expression)
+  dyn_cormat <- stats::cor(dyn.mat[, dyn.genes], method = cor.method)
+  expr_cormat <- stats::cor(expr.mat[, dyn.genes], method = cor.method)
+  dyn_mimat <- minet::build.mim(dyn.mat[, dyn.genes], 
+                                estimator = "mi.empirical", 
+                                disc = "equalwidth")
+  expr_mimat <- minet::build.mim(expr.mat[, dyn.genes],  
+                                 estimator = "mi.empirical", 
+                                 disc = "equalwidth")
+  grn_table <- dplyr::mutate(grn_table, 
+                             Dyn_Cor = NA_real_, 
+                             Exp_Cor = NA_real_, 
+                             Dyn_MI = NA_real_, 
+                             Exp_MI = NA_real_)
   for (i in seq(nrow(grn_table))) {
     grn_table$Dyn_Cor[i] <- dyn_cormat[grn_table$Target_Gene[i], grn_table$Tx_Factor[i]]
+    grn_table$Dyn_MI[i] <- dyn_mimat[grn_table$Target_Gene[i], grn_table$Tx_Factor[i]]
+    grn_table$Exp_Cor[i] <- expr_cormat[grn_table$Target_Gene[i], grn_table$Tx_Factor[i]]
+    grn_table$Exp_MI[i] <- expr_mimat[grn_table$Target_Gene[i], grn_table$Tx_Factor[i]]
   }
   grn_table <- dplyr::mutate(grn_table, State = dplyr::if_else(Dyn_Cor < 0, "Repression", "Activation"))
   return(grn_table)
