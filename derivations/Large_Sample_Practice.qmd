@@ -1,7 +1,7 @@
 ---
 title: "Assorted Large Sample Theory Practice Problems"
 author:
-  name: Jack Leary
+  name: Jack R. Leary
   email: j.leary@ufl.edu
   orcid: 0009-0004-8821-3269
   affiliations:
@@ -17,10 +17,14 @@ format:
     code-copy: true
     code-tools: true
     toc: true
+    toc-depth: 2
     embed-resources: true
     fig-format: retina
     df-print: kable
     link-external-newwindow: true
+    tbl-cap-location: bottom
+    fig-cap-location: bottom
+    number-sections: true
 execute: 
   cache: true
   freeze: auto

@@ -1,0 +1,420 @@
+---
+title: "Annotating and Exploring Human Transcription Factors"
+author:
+  name: Jack R. Leary
+  email: j.leary@ufl.edu
+  orcid: 0009-0004-8821-3269
+  affiliations:
+    - name: University of Florida
+      department: Department of Biostatistics 
+      city: Gainesville
+      state: FL
+date: today
+date-format: long
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    fig-format: retina
+    fig-width: 9
+    fig-height: 6
+    df-print: kable
+    link-external-newwindow: true
+    tbl-cap-location: bottom
+    fig-cap-location: bottom
+    number-sections: true
+execute:
+  cache: false
+  freeze: auto
+---
+
+```{r setup}
+#| include: false
+knitr::opts_chunk$set(comment = NA)
+set.seed(312)
+```
+
+# Introduction {#sec-intro}
+
+This vignette is going to be a bit different from what I usually do. Instead of focusing on an scRNA-seq analysis, we'll use web scraping to pull functional annotations and summaries for a set of human transcription factors (TFs), then use natural language processing (NLP) tools to explore the data. 
+
+# Libraries {#sec-libs}
+
+```{r}
+#| message: false
+#| warning: false
+library(tm)       # text mining
+library(dplyr)    # data manipulation
+library(rvest)    # HTML processing tools
+library(polite)   # web scraping tools
+library(plotly)   # interactive plots
+library(biomaRt)  # gene annotation
+select <- dplyr::select
+```
+
+# Color palettes {#sec-palettes}
+
+```{r}
+palette_cluster <- as.character(paletteer::paletteer_d("ggsci::default_locuszoom"))
+```
+
+# Data {#sec-data}
+
+## Identifying human TFs
+
+First we need to connect to the *H. sapiens* Ensembl database. 
+
+```{r}
+hs_ensembl <- useMart("ensembl",
+                      dataset = "hsapiens_gene_ensembl", 
+                      host = "https://useast.ensembl.org")
+```
+
+We'll start the data-gathering process by reading in a complete set of all known and likely human TFs from [Lambert *et al* (2018)](https://doi.org/10.1016/j.cell.2018.01.029). We clean up the column names using the `janitor` package, then select just the unique Ensembl IDs. 
+
+```{r}
+#| message: false
+#| warning: false
+hs_tf_raw <- readr::read_csv("http://humantfs.ccbr.utoronto.ca/download/v_1.01/DatabaseExtract_v_1.01.csv",
+                             col_select = -1,
+                             num_threads = 2,
+                             show_col_types = FALSE) %>%
+             janitor::clean_names() %>%
+             filter(is_tf == "Yes") %>%
+             select(ensembl_id) %>% 
+             distinct()
+```
+
+Next, using `biomaRt` we pull the HGNC symbol, HGNC ID, Entrez ID, gene description, and gene biotype from the Ensembl database. We perform some light data cleaning, then create a character variable called **summary** in which we'll store the gene summaries we scrape. 
+
+```{r}
+hs_tfs <- getBM(attributes = c("ensembl_gene_id", "hgnc_symbol", "hgnc_id", "entrezgene_id", "description", "gene_biotype"),
+                filters = "ensembl_gene_id",
+                values = hs_tf_raw$ensembl_id,
+                mart = hs_ensembl,
+                uniqueRows = TRUE) %>%
+          rename(ensembl_id = ensembl_gene_id,
+                 entrez_id = entrezgene_id) %>%
+          arrange(ensembl_id) %>%
+          mutate(hgnc_symbol = if_else(hgnc_symbol == "", NA_character_, hgnc_symbol),
+                 hgnc_id = gsub("HGNC:", "", hgnc_id), 
+                 description = gsub("\\[Source.*", "", description), 
+                 summary = NA_character_)
+```
+
+Here's what the dataset looks like so far:
+
+```{r}
+#| code-fold: true
+#| tbl-cap: A random sample of the human transcription factors.
+#| label: tbl-TF_sample
+slice_sample(hs_tfs, n = 7) %>% 
+  kableExtra::kbl(booktabs = TRUE, 
+                  col.names = c("Ensembl ID", "HGNC Symbol", "HGNC ID", "Entrez ID", "Description", "Biotype", "Summary")) %>% 
+  kableExtra::kable_classic(full_width = FALSE, "hover")
+```
+
+## Scraping gene summaries
+
+Now the gene descriptions we have as shown in @tbl-TF_sample are useful, but they don't really tell us a whole lot about how each TF actually functions. To retrieve a functional summary for our TFs we'll use web scraping to pull the [NCBI](https://www.ncbi.nlm.nih.gov) summary for each one. To make this happen we'll use the [`rvest`](https://rvest.tidyverse.org/) and [`polite`](https://dmi3kno.github.io/polite/) packages. The `rvest` package contains a variety of tools for processing HTML data, while `polite` ensures you do so while respecting the scraping rules each site has in a file called `robots.txt` ([more information here](https://developers.google.com/search/docs/crawling-indexing/robots/intro)). This makes scraping a little bit slower, but also ensures that you (almost certainly) won't get banned from the site for doing so.
+
+We'll start by pulling a summary for one gene as an example. The NCBI site uses the numeric Entrez ID of each gene e.g., for the TF forkhead box A3 (*FOXA3*) the Entrez ID is `r filter(hs_tfs, hgnc_symbol == "FOXA3") %>% pull(entrez_id)`. Next, we identify the site rules using the `bow()` function, which also creates a web session. Then we scrape the actual content of the page using the aptly-named `scrape()` function. 
+
+```{r}
+entrez_ID_FOXA3 <- filter(hs_tfs, hgnc_symbol == "FOXA3") %>% 
+                   pull(entrez_id)
+ncbi_url <- paste0("https://www.ncbi.nlm.nih.gov/gene?Cmd=DetailsSearch&Term=", entrez_ID_FOXA3)
+web_page <- bow(ncbi_url)
+web_page_scraped <- scrape(web_page)
+```
+
+This is where it gets a little tricky. In order to correctly identify which bit of the HTML content to extract, it's necessary to use something like the web inspector mode ([guide for Safari](https://developer.apple.com/documentation/safari-developer-tools/web-inspector), [guide for Chrome](https://developer.chrome.com/docs/devtools?hl=en)) to pull the CSS selector for the summary element. This is provided to the `html_node()` function, after which we pull the raw text using `html_text()`. Finally, after a little text cleanup we have the summary for *FOXA3* in plain English!
+
+```{r}
+summary_text <- html_node(web_page_scraped, '#summaryDl > dd:nth-child(20)') %>% 
+                html_text()
+summary_text <- trimws(gsub("\\[provided by.*", "", summary_text))
+summary_text
+```
+
+We wrap the above operations into a (slightly more intelligent) function - expand the code block below to see it - which we'll then apply to every TF in the dataset. 
+
+```{r}
+#| code-fold: true
+pullGeneSummary <- function(entrez.id = NULL) {
+  # check inputs
+  if (is.null(entrez.id)) { stop("You must provide a valid Entrez ID.") }
+  # scrape web page
+  ncbi_url <- paste0("https://www.ncbi.nlm.nih.gov/gene?Cmd=DetailsSearch&Term=", entrez.id)
+  web_page <- polite::bow(ncbi_url)
+  web_page_scraped <- polite::scrape(web_page)
+  # extract gene summary 
+  summary_node <- rvest::html_node(web_page_scraped, '#summaryDl') %>% 
+                  rvest::html_children()
+  summary_node_loc <- which(as.character(summary_node) == "<dt>Summary</dt>") + 1
+  if (length(summary_node_loc) == 0L) {
+    summary_text <- NA_character_
+  } else {
+    summary_text <- rvest::html_node(web_page_scraped, paste0("#summaryDl > dd:nth-child(", summary_node_loc, ")")) %>% 
+                    rvest::html_text()
+    summary_text <- gsub("\\[provided by.*", "", summary_text)
+    summary_text <- trimws(summary_text)
+  }
+  return(summary_text)
+}
+```
+
+With our function in hand, we iterate over the set of TFs and pull the textual summary for each. This will take a while, but there's not really a way around that - if, for example, we ran the loop in parallel, we might hit a rate limit exception due to the number of scraping requests submitted. After all the scraping, we filter out genes for which no summary was available (mostly non-coding RNAs or uncharacterized loci). 
+
+```{r}
+#| eval: false
+for (e in seq(hs_tfs$entrez_id)) {
+  hs_tfs$summary[e] <- pullGeneSummary(hs_tfs$entrez_id[e])
+}
+hs_tfs <- filter(hs_tfs, !is.na(summary))
+```
+
+```{r}
+#| echo: false
+#| results: hide
+# readr::write_csv(hs_tfs, "../../datasets/hs_TF.csv", col_names = TRUE, )
+hs_tfs <- readr::read_csv("../../datasets/hs_TF.csv", show_col_types = FALSE)
+```
+
+For a downloadable version of the final TF table, see @tbl-TF_download.
+
+# Analysis {#sec-analysis}
+
+## Text processing
+
+To begin our analysis we must convert our vector of textual gene summaries into some sort of numeric matrix, upon which we can perform downstream analysis tasks. We'll leverage [the `tm` package](https://cran.r-project.org/web//packages/tm/vignettes/tm.pdf), which implements a variety of tools for text processing. The conversion we'll be performing is referred to as *tokenization*. In this case, we'll be treating each summary as its own "document" and each word as a token. The total set of all documents is referred to as a *corpus*. 
+
+```{r}
+gene_summary_vec <- pull(hs_tfs, summary)
+gene_summary_corpus <- Corpus(VectorSource(gene_summary_vec))
+```
+
+Next we perform several preprocessing steps including the removal of punctuation, numbers, unimportant words called *stopwords* ([more information here](https://pythonspot.com/nltk-stop-words/)), and whitespace.
+
+```{r}
+#| message: false
+#| warning: false
+gene_summary_corpus <- tm_map(gene_summary_corpus, content_transformer(tolower)) %>% 
+                       tm_map(removePunctuation) %>% 
+                       tm_map(removeNumbers) %>% 
+                       tm_map(removeWords, stopwords("english")) %>% 
+                       tm_map(stripWhitespace)
+```
+
+Next, we create a document-term matrix (DTM) - a matrix specifying which words occur in which documents. After we create the DTM, we use term frequency-inverse document frequency (TF-IDF) weighting to assign an "importance" to each term. This value essentially tells us how specific a given term is to a given document. 
+
+```{r}
+gene_summary_DTM <- DocumentTermMatrix(gene_summary_corpus)
+gene_summary_TFIDF <- weightTfIdf(gene_summary_DTM)
+gene_summary_TFIDF_mat <- as.matrix(gene_summary_TFIDF)
+rownames(gene_summary_TFIDF_mat) <- pull(hs_tfs, entrez_id)
+```
+
+Here's a glance at the TF-IDF matrix:
+
+```{r}
+#| code-fold: true
+#| tbl-cap: The first 5 rows (Entrez IDs) and columns (document terms) in our TF-IDF matrix.
+#| label: tbl-TFIDF_sample
+as.data.frame(gene_summary_TFIDF_mat[1:5, 1:5]) %>% 
+  kableExtra::kbl(booktabs = TRUE) %>% 
+  kableExtra::kable_classic(full_width = FALSE, "hover")
+```
+
+## Graph-based clustering
+
+After creating a shared nearest-neighbors (SNN) graph with $k = 20$ neighbors, we utilize the Leiden algorithm to sort the graph into communities, or clusters. We use the cosine distance instead of the default Euclidean. This is a common practice in the NLP field since Euclidean distance breaks down in high dimensions - especially with sparse data (see e.g., [this old CrossValidated post](https://stats.stackexchange.com/questions/29627/euclidean-distance-is-usually-not-good-for-sparse-data-and-more-general-case)). 
+
+```{r}
+SNN_graph <- bluster::makeSNNGraph(gene_summary_TFIDF_mat, 
+                                   k = 20, 
+                                   BNPARAM = BiocNeighbors::AnnoyParam(distance = "Cosine"))
+gene_summary_clusters <- igraph::cluster_leiden(SNN_graph,
+                                                objective_function = "modularity", 
+                                                resolution_parameter = 1)
+```
+
+## Embeddings
+
+We first generate a linear embedding of the TF-IDF matrix in 30 dimensions with PCA. 
+
+```{r}
+pca_embedding <- irlba::prcomp_irlba(gene_summary_TFIDF_mat, 
+                                     n = 30,
+                                     center = TRUE, 
+                                     scale. = TRUE)
+```
+
+Next, we generate a nonlinear two-dimensional embedding of the matrix via UMAP. We tweak the default settings a bit based on my prior experience with the algorithm. 
+
+```{r}
+#| message: false
+#| warning: false
+umap_embedding <- uwot::umap(gene_summary_TFIDF_mat,
+                             n_neighbors = 20, 
+                             n_components = 2, 
+                             metric = "cosine",
+                             n_epochs = 750,
+                             nn_method = "annoy", 
+                             ret_model = TRUE, 
+                             ret_nn = TRUE, 
+                             ret_extra = c("fgraph"),
+                             n_threads = 2,
+                             seed = 312)
+```
+
+We use t-SNE to generate a final 2D embedding. 
+
+```{r}
+tsne_embedding <- Rtsne::Rtsne(gene_summary_TFIDF_mat, 
+                               dims = 2, 
+                               perplexity = 30, 
+                               check_duplicates = FALSE, 
+                               pca = FALSE)
+```
+
+Finally, we create a table of our embeddings plus our clustering, which we'll use for visualization. 
+
+```{r}
+embed_df <- data.frame(entrez_id = pull(hs_tfs, entrez_id), 
+                       hgnc_symbol = pull(hs_tfs, hgnc_symbol), 
+                       ensembl_id = pull(hs_tfs, ensembl_id), 
+                       description = pull(hs_tfs, description), 
+                       pc1 = pca_embedding$x[ ,1], 
+                       pc2 = pca_embedding$x[ ,2], 
+                       umap1 = umap_embedding$embedding[, 1], 
+                       umap2 = umap_embedding$embedding[, 2], 
+                       tsne1 = tsne_embedding$Y[, 1], 
+                       tsne2 = tsne_embedding$Y[, 2], 
+                       leiden = factor(gene_summary_clusters$membership))
+```
+
+Using the `plotly` library we can produce interactive visualizations - hover over each observation to see gene IDs and plot coordinates! Examining the PCA embedding, we see some separation by cluster along the first PC, with the second PC seeming to identify one outlier observation: *PIN1*. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: PCA embedding of the gene summary TF-IDF matrix colored by Leiden cluster.
+#| label: fig-PCA_embed
+fig <- plot_ly(embed_df, 
+               x = ~pc1,
+               y = ~pc2,
+               color = ~leiden, 
+               text = ~paste("<i>", hgnc_symbol, "</i>", "<br>", 
+                             ensembl_id, "<br>",
+                             "Cluster:", leiden), 
+               type = "scatter", 
+               mode = "markers", 
+               colors = palette_cluster) %>% 
+      layout(legend = list(title = list(text = "Leiden")),
+             xaxis = list(title = "PC 1", tickvals = NULL, showticklabels = FALSE, zeroline = FALSE, showline = TRUE, linewidth = 2), 
+             yaxis = list(title = "PC 2", tickvals = NULL, showticklabels = FALSE, zeroline = FALSE, showline = TRUE, linewidth = 2))
+fig
+```
+
+We pull the summary for the TF:
+
+```{r}
+filter(hs_tfs, hgnc_symbol == "PIN1") %>% 
+  pull(summary)
+```
+
+In order to determine what makes *PIN1* unique we can examine the TF-IDF matrix. Using the Entrez ID for *PIN1* (`r filter(hs_tfs, hgnc_symbol == "PIN1") %>% pull(entrez_id)`), we pull the top terms for the TF. We see that terms such as peptidyl-prolyl, PPIases, and several relating to catalysis help to define *PIN1*'s function. 
+
+```{r}
+gene_summary_TFIDF_mat["5300", ] %>% 
+  sort(decreasing = TRUE) %>% 
+  head(n = 10)
+```
+
+Indeed, if we pull the number of genes with a non-zero score for peptidyl-prolyl we find that *PIN1* is the only TF with that word in its summary. 
+
+```{r}
+sum(gene_summary_TFIDF_mat[, "peptidylprolyl"] > 0)
+```
+
+Next, the UMAP embedding seems to perform much better than PCA at preserving the cluster structure of the data (as expected). Interestingly, if you hover over cluster 5 you'll see that it's almost entirely composed of TFs belonging to the zinc finger protein (abbreviated ZNF or ZFP) family. This indicates that our clustering and embedding routine actually pulled out some useful structure from the data. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: UMAP embedding of the gene summary TF-IDF matrix colored by Leiden cluster.
+#| label: fig-UMAP_embed
+fig <- plot_ly(embed_df, 
+               x = ~umap1,
+               y = ~umap2,
+               color = ~leiden, 
+               text = ~paste("<i>", hgnc_symbol, "</i>", "<br>", 
+                             ensembl_id, "<br>", 
+                             "Cluster:", leiden), 
+               type = "scatter", 
+               mode = "markers", 
+               colors = palette_cluster) %>% 
+       layout(legend = list(title = list(text = "Leiden")),
+              xaxis = list(title = "UMAP 1", tickvals = NULL, showticklabels = FALSE, zeroline = FALSE, showline = TRUE, linewidth = 2), 
+              yaxis = list(title = "UMAP 2", tickvals = NULL, showticklabels = FALSE, zeroline = FALSE, showline = TRUE, linewidth = 2))
+fig
+```
+
+And lastly, the t-SNE embedding, which does not seem to preserve the cluster structure of the data well. This isn't too much of a surprise, as UMAP generally provides better embeddings than t-SNE when used on sparse data. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: t-SNE embedding of the gene summary TF-IDF matrix colored by Leiden cluster.
+#| label: fig-tSNE_embed
+fig <- plot_ly(embed_df, 
+               x = ~tsne1,
+               y = ~tsne2,
+               color = ~leiden, 
+               text = ~paste("<i>", hgnc_symbol, "</i>", 
+                             "<br>", ensembl_id, "<br>", 
+                             "Cluster:", leiden), 
+               type = "scatter", 
+               mode = "markers", 
+               colors = palette_cluster) %>% 
+       layout(legend = list(title = list(text = "Leiden")),
+              xaxis = list(title = "t-SNE 1", tickvals = NULL, showticklabels = FALSE, zeroline = FALSE, showline = TRUE, linewidth = 2), 
+              yaxis = list(title = "t-SNE 2", tickvals = NULL, showticklabels = FALSE, zeroline = FALSE, showline = TRUE, linewidth = 2))
+fig
+```
+
+# Conclusions {#sec-conclusions}
+
+In summary, we began by identifying a peer-reviewed set of human TFs and pulling the relevant gene metadata from Ensembl. We next used web scraping to pull a functional summary of each TF. Lastly, using NLP techniques we generated a TF-IDF matrix of the per-gene summaries and estimated several low-dimensional embeddings of the latent space. This had varying results, PCA showed us some interesting information about *PIN1* but didn't retain much of the global structure. UMAP performed well, but t-SNE did not. Overall, more could probably be done to analyze this dataset, but even just having a functional summary of each TF that can be searched and used programmatically is likely useful.  
+
+The final version of the TF table is shown below.  
+
+```{r}
+#| code-fold: true
+#| tbl-cap: A searchable & downloadable representation of the TF table.
+#| label: tbl-TF_download
+DT::datatable(hs_tfs, 
+              colnames = c("Ensembl ID", "HGNC Symbol", "HGNC ID", "Entrez ID", "Description", "Biotype", "Summary"), 
+              rownames = FALSE, 
+              extensions = "Buttons", 
+              options = list(paging = TRUE, 
+                             searching = TRUE, 
+                             ordering = TRUE, 
+                             dom = "Bfrtip", 
+                             buttons = c("csv", "excel", "pdf"),
+                             pageLength = 5))
+```
+
+# Session info {#sec-SI}
+
+```{r}
+sessioninfo::session_info()
+```

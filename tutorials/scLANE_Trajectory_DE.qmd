@@ -1,7 +1,7 @@
 ---
 title: "Interpretable scRNA-seq Trajectory DE with `scLANE`"
 author:
-  name: Jack Leary
+  name: Jack R. Leary
   email: j.leary@ufl.edu
   orcid: 0009-0004-8821-3269
   affiliations:
@@ -25,6 +25,7 @@ format:
     df-print: kable
     link-external-newwindow: true
     tbl-cap-location: bottom
+    fig-cap-location: bottom
     number-sections: true
 execute:
   cache: false
@@ -211,7 +212,7 @@ Let's visualize the results on our UMAP embedding. The clustering generally agre
 
 ```{r}
 #| code-fold: true
-#| fig-cap: Cluster & celltype labels in UMAP space
+#| fig-cap: Cluster & celltype labels in UMAP space.
 #| label: fig-umap_labels
 p0 <- Embeddings(seu, "umap") %>% 
       as.data.frame() %>% 
@@ -272,7 +273,7 @@ Let's visualize the results on our UMAP embedding. They match what we would expe
 
 ```{r}
 #| code-fold: true
-#| fig-cap: Estimated pseudotime in UMAP space
+#| fig-cap: Estimated pseudotime in UMAP space.
 #| label: fig-umap_pseudotime
 p3 <- Embeddings(seu, "umap") %>% 
       as.data.frame() %>% 
@@ -320,7 +321,7 @@ After tidying the TDE results with `getResultsDE()`, we pull a sample of 6 genes
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: TDE test results from scLANE
+#| tbl-cap: TDE test results from scLANE.
 #| label: tbl-scLANE_res
 select(scLANE_res_tidy, 
        Gene, 
@@ -342,7 +343,7 @@ Next, we can use the `plotModels()` function to visualize the fitted models from
 
 ```{r}
 #| code-fold: true
-#| fig-cap: Modeling framework comparison
+#| fig-cap: Modeling framework comparison.
 #| fig-width: 9
 #| fig-height: 5
 #| label: fig-model_comp
@@ -365,7 +366,7 @@ Using the `getFittedValues()` function allows us to generate predictions from th
 
 ```{r}
 #| code-fold: true
-#| fig-cap: scLANE models of endocrinogenesis drivers
+#| fig-cap: scLANE models of endocrinogenesis drivers.
 #| fig-width: 12
 #| fig-height: 6
 #| label: fig-model_scLANE
@@ -421,7 +422,7 @@ On the other hand, if we use additive models the "peak" of expression is placed 
 
 ```{r}
 #| code-fold: true
-#| fig-cap: Additive models of endocrinogenesis drivers
+#| fig-cap: Additive models of endocrinogenesis drivers.
 #| fig-width: 12
 #| fig-height: 6
 #| label: fig-model_GAM
@@ -488,7 +489,7 @@ We'll plot a histogram of the knot values along with a ridgeplot of the pseudoti
 
 ```{r, message=FALSE, warning=FALSE}
 #| code-fold: true
-#| fig-cap: Distribution of adaptively-chosen knots from scLANE
+#| fig-cap: Distribution of adaptively-chosen knots from scLANE.
 #| fig-width: 9
 #| fig-height: 6
 #| label: fig-knot_dist
@@ -541,7 +542,7 @@ First we'll visualize the gene clusters on the first two PCs.
 
 ```{r}
 #| code-fold: true
-#| fig-cap: Unsupervised clustering of genes in PCA space
+#| fig-cap: Unsupervised clustering of genes in PCA space.
 #| label: fig-gene_pca
 p11 <- ggplot(gene_embed, aes(x = pc1, y = pc2, color = leiden)) + 
        geom_point(size = 2, 
@@ -560,7 +561,7 @@ The UMAP embedding shows that even with the relatively small number of genes, cl
 
 ```{r}
 #| code-fold: true
-#| fig-cap: Unsupervised clustering of genes in UMAP space
+#| fig-cap: Unsupervised clustering of genes in UMAP space.
 #| label: fig-gene_umap
 p12 <- ggplot(gene_embed, aes(x = umap1, y = umap2, color = leiden)) + 
        geom_point(size = 2, 
@@ -622,7 +623,7 @@ The heatmap shows clear dynamic patterns across pseudotime; these patterns are o
 #| message: false
 #| fig-width: 12
 #| fig-height: 6
-#| fig-cap: Expression cascades of dynamic genes
+#| fig-cap: Expression cascades of dynamic genes.
 #| label: fig-exp_cascade
 Heatmap(matrix = heatmap_mat, 
         name = "Spliced\nmRNA", 
@@ -666,7 +667,7 @@ A look at the top 5 most-significant GO terms for each gene cluster reveals hete
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: Top 5 biological process GO terms per cluster
+#| tbl-cap: The top-5 biological process GO terms per cluster.
 #| label: tbl-go_bp
 mutate(enrich_res$result, 
        query = gsub("Leiden_", "", query)) %>% 
@@ -707,7 +708,7 @@ Visualizing the scores on our UMAP embedding shows us that the peptide program i
 
 ```{r}
 #| code-fold: true
-#| fig-cap: Enrichment of peptide production gene program
+#| fig-cap: Enrichment of peptide production gene program. 
 #| label: fig-peptide_enr
 p13 <- Embeddings(seu, "umap") %>% 
        as.data.frame() %>% 
@@ -731,7 +732,7 @@ We can also visualize the trend in the peptide program scores over time, which c
 ```{r}
 #| code-fold: true
 #| message: false
-#| fig-cap: Peptide production gene program scores over pseudotime
+#| fig-cap: Peptide production gene program scores over pseudotime. 
 #| label: fig-peptide_smoother
 p15 <- data.frame(PT = sling_pt$PT, 
                   peptide_program_score = seu$peptide_production, 
@@ -764,7 +765,7 @@ We display the top 10 most-correlated genes here. For example, carboxypeptidase 
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: Top 10 driver genes for the peptide production gene program
+#| tbl-cap: The top-10 driver genes for the peptide production gene program. 
 #| label: tbl-driver_genes
 slice_head(program_drivers, n = 10) %>% 
   kableExtra::kbl(digits = 3, 
@@ -779,7 +780,7 @@ Indeed, normalized expression of *Cpe* is high across all mature endocrine cellt
 ```{r}
 #| code-fold: true
 #| message: false
-#| fig-cap: Driver gene expression by celltype
+#| fig-cap: Beeswarm plots of driver gene expression by celltype. 
 #| label: fig-driver_gene_exp
 #| fig-width: 9
 #| fig-height: 5
@@ -823,7 +824,7 @@ All six gene programs appear to be significantly associated with pseudotime.
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: Significance testing for gene programs across the trajectory
+#| tbl-cap: Significance testing for gene programs across the trajectory. 
 #| label: tbl-prog_signif
 kableExtra::kbl(prog_signif, 
                 digits = 4, 
@@ -848,7 +849,7 @@ Overall, there are `r length(unique(dyn_go_bp_terms$term_id))` unique significan
 
 ```{r}
 #| code-fold: true
-#| tbl-cap: Random sample of the biological processes enriched for the dynamic gene set
+#| tbl-cap: Random sample of the biological processes enriched for the dynamic gene set. 
 #| label: tbl-bp_terms
 select(dyn_go_bp_terms, term_name, p_value, source) %>% 
   slice_sample(n = 10) %>% 

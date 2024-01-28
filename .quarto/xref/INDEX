@@ -49,5 +49,8 @@
   },
   "tutorials/Trajectory_GRN.qmd": {
     "Trajectory_GRN.html": "2f796292"
+  },
+  "tutorials/TF_Web_Scraping.qmd": {
+    "TF_Web_Scraping.html": "d1010984"
   }
 }
