@@ -9,6 +9,7 @@ project:
     - "!tutorials/Scaffold_Simulation.qmd"
     - "!tutorials/GLMM_Benchmarking.qmd"
     - "!tutorials/Integration_Tutorial.qmd"
+    - "!tutorials/GRN_Simulation.qmd"
 website:
   title: "Jack Leary"
   repo-url: https://github.com/jr-leary7/quarto-site
