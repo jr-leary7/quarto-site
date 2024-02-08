@@ -1,0 +1,775 @@
+---
+title: "Simulating Trajectory Gene Regulatory Networks via `dyngen`"
+author:
+  name: Jack R. Leary
+  email: j.leary@ufl.edu
+  orcid: 0009-0004-8821-3269
+  affiliations:
+    - name: University of Florida
+      department: Department of Biostatistics 
+      city: Gainesville
+      state: FL
+date: today
+date-format: long
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    fig-format: retina
+    fig-width: 9
+    fig-height: 6
+    df-print: kable
+    link-external-newwindow: true
+    tbl-cap-location: bottom
+    fig-cap-location: bottom
+    number-sections: true
+execute:
+  cache: false
+  freeze: auto
+---
+
+```{r setup}
+#| include: false
+knitr::opts_chunk$set(comment = NA)
+reticulate::use_virtualenv("~/Desktop/PhD/Research/Python_Envs/personal_site/", required = TRUE)
+set.seed(312)
+```
+
+# Introduction {#sec-introduction}
+
+As 2024 begins, a concept I've been very interested in is gene regulatory networks (GRNs), specifically how they function during developmental biological processes such as hematopoesis, neurogenesis, etc. As such, I've been prototyping some methods for trajectory GRN estimation & downstream analysis. This has necessarily led to the need for a ground-truth network against which I can compare GRN estimation tools. Most published GRN methods use ChIP-seq or ATAC-seq datasets as a silver-standard source of truth, since simulating GRNs is complex and difficult. To my knowledge, the only tool that exists that implements GRN-based scRNA-seq trajectory simulation is [`dyngen`](https://dyngen.dynverse.org/index.html). However, it isn't the easiest tool to use, hence why I've decided to put together a guide for 1) simulating a GRN and 2) checking several estimation methods against the ground truth network. Skip to @sec-sims for the simulation, and @sec-analysis for the method comparisons. 
+
+# Libraries {#sec-libraries}
+
+First we load the packages we'll need for our analysis. 
+
+```{r}
+#| message: false
+#| warning: false
+library(epoch)      # dynamic GRN estimation
+library(dplyr)      # data manipulation
+library(Seurat)     # scRNA-seq tools
+library(dyngen)     # simulations
+library(scLANE)     # trajectory DE
+library(ggplot2)    # pretty plots
+library(foreach)    # parallel for-loops
+library(patchwork)  # plot combination
+library(slingshot)  # pseudotime estimation
+rename <- dplyr::rename
+```
+
+# Helper functions {#sec-fns}
+
+We define a utility function to make our plot legends easier to read. 
+
+```{r}
+guide_umap <- function(key.size = 4) {
+  ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = key.size,
+                                                                    alpha = 1, 
+                                                                    stroke = 0.25)))
+}
+```
+
+And consistent color palettes will make our plots easier to understand. 
+
+```{r}
+palette_cluster <- paletteer::paletteer_d("ggsci::nrc_npg")
+palette_heatmap <- paletteer::paletteer_d("MetBrewer::Hiroshige", direction = -1)
+```
+
+Lastly, we load in a function [I wrote previously](https://jr-leary7.github.io/quarto-site/tutorials/Trajectory_GRN.html) that estimates a trajectory GRN using XGBoost. Expand the code block below for details. 
+
+```{r}
+#| code-fold: true
+estimateTGRN <- function(dyn.mat = NULL,
+                         expr.mat = NULL, 
+                         dyn.genes = NULL, 
+                         tx.factors = NULL, 
+                         cor.method = "spearman",
+                         n.cores = 4L, 
+                         verbose = TRUE, 
+                         random.seed = 312) {
+  # check inputs 
+  if (is.null(expr.mat) || is.null(dyn.mat) || is.null(dyn.genes) || is.null(tx.factors)) { stop("Arguments to estimateTGRN() are missing.") }
+  # identify dynamic TFs
+  tx.factors <- tx.factors[tx.factors %in% dyn.genes]
+  # set up progress bar if desired
+  if (verbose) {
+    withr::with_output_sink(tempfile(), {
+      pb <- utils::txtProgressBar(0, length(dyn.genes), style = 3)
+    })
+    progress_fun <- function(n) utils::setTxtProgressBar(pb, n)
+    snow_opts <- list(progress = progress_fun)
+  } else {
+    snow_opts <- list()
+  }
+  # set up parallel processing
+  if (n.cores > 1L) {
+    cl <- parallel::makeCluster(n.cores)
+    doSNOW::registerDoSNOW(cl)
+  } else {
+    cl <- foreach::registerDoSEQ()
+  }
+  # set up LightGBM model settings
+  lgbm_params <- list(objective = "gamma", 
+                      tree_learner = "serial", 
+                      metric = "l2", 
+                      boosting_type = "dart",
+                      device = "cpu",
+                      num_threads = 1L, 
+                      seed = random.seed)
+  # estimate trajectory GRN
+  grn_res <- foreach::foreach(g = seq(dyn.genes), 
+                              .combine = "list",
+                              .multicombine = ifelse(length(dyn.genes) > 1, TRUE, FALSE),
+                              .maxcombine = ifelse(length(dyn.genes) > 1, length(dyn.genes), 2),
+                              .packages = c("lightgbm", "dplyr"),
+                              .errorhandling = "pass",
+                              .inorder = TRUE,
+                              .verbose = FALSE,
+                              .options.snow = snow_opts) %dopar% {
+                                feature_mat <- dyn.mat[, tx.factors]
+                                feature_mat <- feature_mat[, colnames(feature_mat) != dyn.genes[g]]
+                                resp_var <- dyn.mat[, dyn.genes[g]]
+                                lgbm_data <- lightgbm::lgb.Dataset(data = feature_mat, label = resp_var)
+                                lgbm_cv <- lightgbm::lgb.cv(params = lgbm_params, 
+                                                            data = lgbm_data, 
+                                                            nrounds = 100L, 
+                                                            nfold = 5L, 
+                                                            stratified = FALSE)
+                                lgbm_model <- lightgbm::lgb.train(params = lgbm_params, 
+                                                                  data = lgbm_data, 
+                                                                  nrounds = lgbm_cv$best_iter)
+                                imp_table <- as.data.frame(lightgbm::lgb.importance(lgbm_model)) %>% 
+                                             dplyr::mutate(Target_Gene = dyn.genes[g],
+                                                           Target_Gene_Type = dplyr::if_else(Target_Gene %in% tx.factors, "TF", "Non-TF"), 
+                                                           .before = 1)
+                                imp_table
+                              }
+  names(grn_res) <- dyn.genes
+  if (n.cores > 1L) {
+    parallel::stopCluster(cl)
+  }
+  # format GRN table
+  grn_table <- purrr::imap(grn_res, \(x, y) {
+    if (!inherits(x, "data.frame")) {
+      empty_res <- data.frame(Target_Gene = y, 
+                              Target_Gene_Type = ifelse(y %in% tx.factors, "TF", "Non-TF"), 
+                              Feature = NA_character_, 
+                              Gain = NA_real_, 
+                              Cover = NA_real_, 
+                              Frequency = NA_real_)
+      return(empty_res)
+    } else {
+      return(x)
+    }
+  })
+  # add mean rank of gain & frequency
+  grn_table <- purrr::reduce(grn_table, rbind) %>% 
+               dplyr::select(-Cover) %>% 
+               dplyr::rename(Tx_Factor = Feature) %>% 
+               dplyr::filter(!is.na(Target_Gene), 
+                             !is.na(Tx_Factor)) %>% 
+               dplyr::arrange(Tx_Factor, dplyr::desc(Frequency)) %>% 
+               dplyr::with_groups(Tx_Factor, 
+                                  dplyr::mutate, 
+                                  Frequency_Rank = dplyr::row_number()) %>% 
+               dplyr::arrange(Tx_Factor, desc(Gain)) %>% 
+               dplyr::with_groups(Tx_Factor, 
+                                  dplyr::mutate, 
+                                  Gain_Rank = dplyr::row_number()) %>% 
+               dplyr::rowwise() %>% 
+               dplyr::mutate(Mean_Rank = mean(dplyr::c_across(c(Frequency_Rank, Gain_Rank)))) %>% 
+               dplyr::ungroup() %>% 
+               dplyr::arrange(Tx_Factor, Mean_Rank) %>% 
+               dplyr::mutate(Mean_Rank_Weight = 1 / Mean_Rank)
+  # add correlation & mutual information b/t TF and each target gene (dynamics and normalized expression)
+  dyn_cormat <- stats::cor(dyn.mat[, dyn.genes], method = cor.method)
+  expr_cormat <- stats::cor(expr.mat[, dyn.genes], method = cor.method)
+  dyn_mimat <- minet::build.mim(dyn.mat[, dyn.genes], 
+                                estimator = "mi.empirical", 
+                                disc = "equalwidth")
+  expr_mimat <- minet::build.mim(expr.mat[, dyn.genes],  
+                                 estimator = "mi.empirical", 
+                                 disc = "equalwidth")
+  grn_table <- dplyr::mutate(grn_table, 
+                             Dyn_Cor = NA_real_, 
+                             Exp_Cor = NA_real_, 
+                             Dyn_MI = NA_real_, 
+                             Exp_MI = NA_real_)
+  for (i in seq(nrow(grn_table))) {
+    grn_table$Dyn_Cor[i] <- dyn_cormat[grn_table$Target_Gene[i], grn_table$Tx_Factor[i]]
+    grn_table$Dyn_MI[i] <- dyn_mimat[grn_table$Target_Gene[i], grn_table$Tx_Factor[i]]
+    grn_table$Exp_Cor[i] <- expr_cormat[grn_table$Target_Gene[i], grn_table$Tx_Factor[i]]
+    grn_table$Exp_MI[i] <- expr_mimat[grn_table$Target_Gene[i], grn_table$Tx_Factor[i]]
+  }
+  grn_table <- dplyr::mutate(grn_table, State = dplyr::if_else(Dyn_Cor < 0, "Repression", "Activation"))
+  return(grn_table)
+}
+```
+
+# Simulating scRNA-seq data {#sec-sims}
+
+The `dyngen` workflow starts with what they call a *backbone*, which specifies the shape of the cellular manifold. In this case we opt for a simple bifurcating trajectory composed of 2500 cells. The number of transcription factors (TFs) is a random variable, but we specify 500 target genes and 5000 housekeeping genes. 
+
+```{r}
+sim_backbone <- backbone_bifurcating()
+sim_config <- initialise_model(sim_backbone,
+                               num_cells = 4000, 
+                               num_tfs = nrow(sim_backbone$module_info),
+                               num_targets = 500,
+                               num_hks = 4000,
+                               distance_metric = "pearson", 
+                               num_cores = 4L, 
+                               verbose = FALSE)
+```
+
+We visualize the gene module structure of our trajectory; note that we simulated `nrow(sim_backbone$module_info)` modules, each with a controlling TF. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 8
+#| fig-height: 6
+#| fig-cap: The cascading gene module structure of our trajectory. 
+#| label: fig-str1
+p1 <- plot_backbone_modulenet(sim_config) + 
+      labs(x = "Dim 1", 
+           y = "Dim 2", 
+           edge_width = "Strength", 
+           color = "Gene Module") + 
+      theme_scLANE(umap = TRUE) + 
+      theme(legend.box = "horizontal")
+p1
+```
+
+Using the gene modules, we estimate our TF network.
+
+```{r}
+tf_model <- generate_tf_network(sim_config)
+```
+
+We visualize the relationships between our TFs. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 8
+#| fig-height: 6
+#| fig-cap: Directional relationships between the TFs that control each gene module. 
+#| label: fig-str2
+p2 <- plot_feature_network(tf_model, show_targets = FALSE) + 
+      labs(x = "Dim 1", 
+           y = "Dim 2", 
+           size = "TF Status", 
+           color = "Gene Module") + 
+      theme_scLANE(umap = TRUE) + 
+      theme(legend.box = "horizontal") + 
+      guides(color = guide_legend(override.aes = list(size = 4, alpha = 1)))
+p2
+```
+
+Next, we generate our target and housekeeping genes, along with the splicing kinetics for all genes. 
+
+```{r}
+#| results: hide
+tf_model <- generate_feature_network(tf_model) %>% 
+            generate_kinetics()
+```
+
+This extraordinarily messy (thanks to the large number of genes) plot shows our TFs, their targets, and the non-regulatory housekeeping genes. The `dyngen` documentation specifies that TFs are regulated solely by TFs, target genes may be regulated by TFs or other target genes, and housekeeping genes are not part of regulatory structure of the trajectory. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 8
+#| fig-height: 6
+#| fig-cap: The directed structure of all genes - TFs, target genes, and housekeeping genes. 
+#| label: fig-str3
+p3 <- plot_feature_network(tf_model, show_hks = TRUE) + 
+      labs(x = "Dim 1", 
+           y = "Dim 2", 
+           size = "TF Status", 
+           color = "Gene Module") + 
+      theme_scLANE(umap = TRUE) + 
+      theme(legend.box = "horizontal") + 
+      guides(color = guide_legend(override.aes = list(size = 4, alpha = 1), order = 1))
+p3
+```
+
+Continuing on, we use the following sequence of functions to simulate cells along our bifurcating trajectory. 
+
+::: {.callout-warning}
+If you're using a local machine (like I am), this step will take 30 or so minutes to run. 
+:::
+
+```{r}
+#| message: false
+#| warning: false
+#| results: hide
+tf_model <- generate_gold_standard(tf_model) %>% 
+            generate_cells() %>% 
+            generate_experiment()
+```
+
+Finally, we convert our simulated dataset to a `Seurat` object for easier downstream analysis. In addition, we add a normalized ground-truth pseudotime that exists on $[0, 1]$ for aesthetic purposes. 
+ 
+```{r}
+seu <- as_seurat(tf_model)
+seu@meta.data <- mutate(seu@meta.data, 
+                        sim_time_norm = (sim_time - min(sim_time)) / (max(sim_time) - min(sim_time)), 
+                        .before = 7)
+```
+
+The ground-truth pseudotime values are stored in **sim_time**, and sequencing depth and feature counts have already been computed for total RNA, unspliced & spliced RNA, and protein. 
+
+```{r}
+#| code-fold: true
+#| tbl-cap: The cell-level metadata of our Seurat object. 
+#| label: tbl-metadata
+slice_sample(seu@meta.data, n = 10) %>% 
+  kableExtra::kable(digits = 2, booktabs = TRUE) %>% 
+  kableExtra::kable_classic("hover", full_width = FALSE)
+```
+
+# Analysis {#sec-analysis}
+
+## Preprocessing
+
+We run the cells through a standard processing pipeline consisting of normalization, highly-variable gene (HVG) identification, linear dimension reduction with PCA followed by nonlinear dimension reduction with UMAP, and a graph-based clustering via the Leiden algorithm. 
+
+```{r}
+#| warning: false
+#| message: false
+seu <- NormalizeData(seu, verbose = FALSE) %>% 
+       FindVariableFeatures(nfeatures = 3000, verbose = FALSE) %>% 
+       ScaleData(verbose = FALSE) %>% 
+       RunPCA(npcs = 50, 
+              approx = TRUE, 
+              seed.use = 312, 
+              verbose = FALSE) %>% 
+       RunUMAP(reduction = "pca", 
+               dims = 1:30, 
+               n.components = 2, 
+               metric = "cosine", 
+               seed.use = 312, 
+               verbose = FALSE) %>% 
+       FindNeighbors(reduction = "pca", 
+                     k.param = 20,
+                     nn.method = "annoy", 
+                     annoy.metric = "cosine", 
+                     verbose = FALSE) %>% 
+       FindClusters(algorithm = 4, 
+                    method = "igraph", 
+                    resolution = 0.3, 
+                    random.seed = 312, 
+                    verbose = FALSE)
+```
+
+Our UMAP embedding has retained the bifurcating structure of our simulated trajectory well, and our clustering appears correct too. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 8
+#| fig-height: 5
+#| fig-cap: UMAP embedding colored by Leiden cluster ID (left) and ground-truth pseudotime (right). 
+#| label: fig-umap1
+p4 <- as.data.frame(Embeddings(seu, "umap")) %>% 
+      mutate(leiden = seu$seurat_clusters) %>% 
+      ggplot(aes(x = umap_1, y = umap_2, color = leiden)) + 
+      geom_point(size = 1.75, 
+                 stroke = 0, 
+                 alpha = 0.75) + 
+      scale_color_manual(values = palette_cluster) + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           color = "Leiden") +
+      theme_scLANE(umap = TRUE) + 
+      guide_umap()
+p5 <- as.data.frame(Embeddings(seu, "umap")) %>% 
+      mutate(PT = seu$sim_time_norm) %>% 
+      ggplot(aes(x = umap_1, y = umap_2, color = PT)) + 
+      geom_point(size = 1.75, 
+                 stroke = 0, 
+                 alpha = 0.75) + 
+      scale_color_gradientn(colors = palette_heatmap) + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           color = "Pseudotime") +
+      scLANE::theme_scLANE(umap = TRUE)
+p6 <- (p4 | p5) + 
+      plot_layout(guides = "collect", axes = "collect")
+p6
+```
+
+Visualizing the spread of pseudotime values per-cluster reveals that cluster 1 should the starting (or root) node, and clusters 3 & 5 the terminal (or leaf) nodes. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 6
+#| fig-height: 4
+#| fig-cap: Beeswarm plot displaying the distribution of ground-truth pseudotime per Leiden cluster. 
+#| label: fig-PT_beeswarm
+p7 <- data.frame(leiden = seu$seurat_clusters, 
+                 PT = seu$sim_time_norm) %>% 
+      ggplot(aes(x = leiden, y = PT, color = leiden)) + 
+      ggbeeswarm::geom_quasirandom(size = 1.5, 
+                                   stroke = 0,
+                                   alpha = 0.75) + 
+      stat_summary(color = "black", 
+                   geom = "point", 
+                   fun = "mean", 
+                   size = 3) + 
+      scale_color_manual(values = palette_cluster) + 
+      labs(y = "Pseudotime", color = "Leiden") + 
+      theme_scLANE() + 
+      theme(axis.title.x = element_blank()) + 
+      guide_umap()
+p7
+```
+
+## Pseudotime estimation
+
+Since `dyngen` doesn't explicitly assign each cell to a lineage (at least as far as I can tell), we use `slingshot` to estimate a lineage-specific pseudotime. As per @fig-PT_beeswarm, we specify cluster 1 as the root of the trajectory. Afterwards, we create an overall pseudotime by mean-aggregating the per-lineage pseudotime values assigned to each cell. 
+
+```{r}
+sling_res <- slingshot(Embeddings(seu, "umap"), 
+                       clusterLabels = seu$seurat_clusters, 
+                       start.clus = c("1"))
+sling_curves <- slingCurves(sling_res, as.df = TRUE)
+sling_mst <- slingMST(sling_res, as.df = TRUE)
+sling_pt <- as.data.frame(slingPseudotime(sling_res)) %>% 
+            rowwise() %>% 
+            mutate(PT_Overall = mean(c_across(starts_with("Lineage")), na.rm = TRUE)) %>% 
+            ungroup() %>% 
+            mutate(across(c(starts_with("Lineage"), PT_Overall), 
+                          \(x) (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))))
+seu <- AddMetaData(seu, 
+                   metadata = sling_pt$PT_Overall, 
+                   col.name = "PT_Overall")
+```
+
+The Spearman correlation between the true & estimated pseudotimes for each cell is quite high, indicating that `slingshot` did a solid job recapitulating the ground truth. The fit isn't perfect, but it looks good enough to justify using the lineage-specific estimated pseudotime. This will allow us to build a GRN per-lineage, which is more useful than a single overall network. 
+
+```{r}
+#| fig-width: 5
+#| fig-height: 5
+#| fig-cap: The Spearman correlation between true & estimated pseudotime. A fit from a simple linear model is overlaid in black. 
+#| label: fig-PT_cor
+#| message: false
+#| warning: false
+p8 <- data.frame(PT_true = seu$sim_time_norm, 
+                 PT_est = seu$PT_Overall, 
+                 leiden = seu$seurat_clusters) %>% 
+      ggplot(aes(x = PT_true, y = PT_est)) + 
+      geom_point(aes(color = leiden), 
+                 size = 1.5, 
+                 stroke = 0, 
+                 alpha = 0.75) + 
+      geom_smooth(method = "lm", color = "black") + 
+      ggpubr::stat_cor(method = "spearman", 
+                       cor.coef.name = "rho", 
+                       geom = "label", 
+                       label.x = 0.5, 
+                       label.y = 0.25) + 
+      scale_x_continuous(limits = c(0, 1)) + 
+      scale_y_continuous(limits = c(0, 1)) + 
+      scale_color_manual(values = palette_cluster) + 
+      labs(x = "True Pseudotime", 
+           y = "Estimated Pseudotime", 
+           color = "Leiden") + 
+      theme_scLANE() + 
+      guide_umap()
+p8
+```
+
+The minimum spanning tree (MST) and principal curves from `slingshot` appear to match our ground-truth trajectory structure quite well. In addition, as shown above in @fig-PT_cor the estimated pseudotime closely matches the ground truth. 
+
+```{r}
+#| code-fold: true
+#| fig-width: 8
+#| fig-height: 5
+#| fig-cap: UMAP embedding with MST from Slinghot overlaid.
+#| label: fig-umap_MST
+p9 <- data.frame(Embeddings(seu, "umap")) %>% 
+      mutate(leiden = seu$seurat_clusters) %>% 
+      ggplot(aes(x = umap_1, y = umap_2, color = leiden)) + 
+      geom_point(size = 1.5, 
+                 stroke = 0, 
+                 alpha = 0.75) + 
+      geom_path(data = sling_mst, mapping = aes(x = umap_1, y = umap_2, group = Lineage), 
+                linewidth = 1.25, 
+                color = "black") + 
+      geom_point(data = sling_mst, mapping = aes(x = umap_1, y = umap_2, fill = Cluster), 
+                color = "black", 
+                shape = 21, 
+                size = 4.5, 
+                stroke = 1.25, 
+                show.legend = FALSE) + 
+      scale_color_manual(values = palette_cluster) + 
+      scale_fill_manual(values = palette_cluster) + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           color = "Leiden") + 
+      theme_scLANE(umap = TRUE) +  
+      guide_umap()
+p10 <- data.frame(Embeddings(seu, "umap")) %>% 
+       mutate(leiden = seu$seurat_clusters) %>% 
+       ggplot(aes(x = umap_1, y = umap_2, color = leiden)) + 
+       geom_point(size = 1.5, 
+                  stroke = 0, 
+                  alpha = 0.75) + 
+       geom_path(data = sling_curves,
+                 mapping = aes(x = umap_1, y = umap_2, group = Lineage), 
+                 color = "black", 
+                 linewidth = 1.5, 
+                 alpha = 0.75, 
+                 lineend = "round") + 
+       scale_color_manual(values = palette_cluster) + 
+       labs(x = "UMAP 1", 
+            y = "UMAP 2", 
+            color =  "Leiden") + 
+       theme_scLANE(umap = TRUE) + 
+       guide_umap()
+p11 <- select(sling_pt, starts_with("Lineage")) %>% 
+       mutate(cell = colnames(seu), 
+              umap_1 = seu@reductions$umap@cell.embeddings[, 1], 
+              umap_2 = seu@reductions$umap@cell.embeddings[, 2], 
+              .before = 1) %>% 
+       tidyr::pivot_longer(cols = starts_with("Lineage"), 
+                           names_to = "lineage",
+                           values_to = "pseudotime") %>% 
+       ggplot(aes(x = umap_1, y = umap_2, color = pseudotime)) + 
+       facet_wrap(~lineage) + 
+       geom_point(size = 1.5, 
+                  stroke = 0, 
+                  alpha = 0.75) + 
+       scale_color_gradientn(colors = palette_heatmap) + 
+       labs(x = "UMAP 1", 
+            y = "UMAP 2", 
+            color = "Pseudotime") + 
+       theme_scLANE(umap = TRUE)
+p12 <- (((p9 | p10) + plot_layout(axes = "collect")) / p11) + 
+       plot_layout(guides = "collect")
+p12
+```
+
+## Estimating trajectory dynamics
+
+Using `scLANE` ([GitHub](https://github.com/jr-leary7/scLANE)) we perform trajectory differential expression (DE) testing on the set of HVGs. 
+
+```{r}
+pt_df <- select(sling_pt, -PT_Overall)
+cell_offset <- createCellOffset(seu)
+scLANE_models <- testDynamic(seu, 
+                             pt = pt_df, 
+                             genes = VariableFeatures(seu), 
+                             size.factor.offset = cell_offset,
+                             n.cores = 4L, 
+                             verbose = TRUE)
+scLANE_de_res <- getResultsDE(scLANE_models)
+```
+
+The top ten genes from `scLANE` are shown in @tbl-scLANE_res. 
+
+```{r}
+#| code-fold: true
+#| tbl-cap: The top-10 trajectory DE genes from scLANE. 
+#| label: tbl-scLANE_res
+slice_head(scLANE_de_res, n = 10) %>% 
+  select(Gene, Lineage, Test_Stat, P_Val_Adj, Gene_Dynamic_Lineage, Gene_Dynamic_Overall) %>% 
+  mutate(Gene_Dynamic_Lineage = if_else(Gene_Dynamic_Lineage == 1, "Dynamic", "Static"), 
+         Gene_Dynamic_Overall = if_else(Gene_Dynamic_Overall == 1, "Dynamic", "Static")) %>% 
+  kableExtra::kable(digits = 2, 
+                    booktabs = TRUE, 
+                    col.names = c("Gene", "Lineage", "LRT Stat.", "Adj. P-value", "Lineage Status", "Overall Status")) %>% 
+  kableExtra::kable_classic("hover", full_width = FALSE)
+```
+
+We identify a set of `r filter(scLANE_de_res, Gene_Dynamic_Overall == 1) %>% distinct(Gene) %>% nrow()` dynamic genes. 
+
+```{r}
+dyn_genes <- filter(scLANE_de_res, Gene_Dynamic_Overall == 1) %>% 
+             distinct(Gene) %>% 
+             pull(Gene)
+```
+
+Next, we pull a matrix of gene dynamics for each of the dynamic genes using the `smoothedCountsMatrix()` function. 
+
+```{r}
+gene_dynamics <- smoothedCountsMatrix(scLANE_models, 
+                                      size.factor.offset = cell_offset, 
+                                      pt = pt_df,
+                                      genes = dyn_genes, 
+                                      log1p.norm = TRUE, 
+                                      n.cores = 2L)
+```
+
+## Building a GRN from scratch
+
+We'll start by building a GRN on our own without using external packages. The main logic comes from the function defined in @sec-fns. 
+
+```{r}
+tx_factors <- filter(seu@assays$RNA@meta.features, is_tf == TRUE) %>% 
+              rownames()
+GRN_truth <- select(tf_model$feature_network, 
+                    from, 
+                    to, 
+                    effect, 
+                    strength) %>% 
+             rename(Tx_Factor = from, 
+                    Target_Gene = to) %>% 
+             arrange(Tx_Factor, desc(strength)) %>% 
+             mutate(Tx_Factor = gsub("_", "-", Tx_Factor), 
+                    Target_Gene = gsub("_", "-", Target_Gene)) %>% 
+             filter(!grepl("HK", Tx_Factor), 
+                    !grepl("Target", Tx_Factor))
+GRN_lineage1 <- estimateTGRN(dyn.mat = gene_dynamics$Lineage_A, 
+                             expr.mat = as.matrix(t(seu@assays$RNA@data[colnames(gene_dynamics$Lineage_A), !is.na(pt_df$Lineage1)])), 
+                             dyn.genes = colnames(gene_dynamics$Lineage_A), 
+                             tx.factors = tx_factors,
+                             n.cores = 4L, 
+                             verbose = TRUE) %>% 
+                mutate(Lineage = "Lineage1", .before = 1)
+GRN_lineage2 <- estimateTGRN(gene_dynamics$Lineage_B, 
+                             expr.mat = as.matrix(t(seu@assays$RNA@data[colnames(gene_dynamics$Lineage_B), !is.na(pt_df$Lineage2)])), 
+                             dyn.genes = colnames(gene_dynamics$Lineage_B), 
+                             tx.factors = tx_factors,
+                             n.cores = 4L, 
+                             verbose = TRUE) %>% 
+                mutate(Lineage = "Lineage2", .before = 1)
+GRN_all <- bind_rows(GRN_lineage1, GRN_lineage2) %>% 
+           arrange(Lineage, Tx_Factor, desc(Mean_Rank)) %>% 
+           with_groups(c(Lineage, Tx_Factor), 
+                       slice_head, 
+                       n = 10)
+```
+
+### Estimating accuracy
+
+Since our simulation only defines the network over the entire dataset, instead of in a lineage-specific manner, we'll define a "correct" GRN link as 
+
+```{r}
+scLANE_detected_vec <- scLANE_dir_vec_lin1 <- scLANE_dir_vec_lin2 <- vector("numeric", nrow(GRN_truth))
+for (i in seq(nrow(GRN_truth))) {
+  sub_df <- filter(GRN_all, 
+                   Tx_Factor == GRN_truth$Tx_Factor[i])
+ scLANE_detected_vec[i] <- ifelse(nrow(sub_df > 0), 1, 0)
+ scLANE_dir_vec_lin1 <- filter(GRN_lineage1, 
+                               Tx_Factor == GRN_truth$Tx_Factor[i], 
+                               Target_Gene == GRN_truth$Target_Gene[i]) %>% 
+                        pull(Dyn_Cor)
+ scLANE_dir_vec_lin1[i] <- ifelse(length(scLANE_dir_vec_lin1) != 0, scLANE_dir_vec_lin1, NA_real_)
+ scLANE_dir_vec_lin2 <- filter(GRN_lineage2, 
+                               Tx_Factor == GRN_truth$Tx_Factor[i], 
+                               Target_Gene == GRN_truth$Target_Gene[i]) %>% 
+                        pull(Dyn_Cor)
+ scLANE_dir_vec_lin2[i] <- ifelse(length(scLANE_dir_vec_lin2) != 0, scLANE_dir_vec_lin2, NA_real_)
+}
+GRN_truth <- mutate(GRN_truth, 
+                    scLANE_detected = scLANE_detected_vec, 
+                    scLANE_direction_lineage1 = scLANE_dir_vec_lin1,
+                    scLANE_direction_lineage2 = scLANE_dir_vec_lin2) %>% 
+             mutate(scLANE_dir_correct = case_when(effect == 1 & (scLANE_direction_lineage1 > 0 | scLANE_direction_lineage2 > 0) ~ 1, 
+                                               effect == -1 & (scLANE_direction_lineage1 < 0 | scLANE_direction_lineage2 < 0) ~ 1, 
+                                               TRUE ~ 0), 
+                    scLANE_fully_correct = if_else(scLANE_detected == 1 & scLANE_dir_correct == 1, 1, 0)) %>% View()
+```
+
+## Fitting a GRN with `epoch`
+
+Next, we use the `epoch` R package ([paper](https://doi.org/10.1016/j.stemcr.2021.12.018), [GitHub](https://github.com/CahanLab/epoch/)) to estimate a GRN for each lineage using the Pearson correlation of expression between dynamic genes. We start by identifying a set of genes dynamic across lineage 1 (as with `scLANE`, we test solely the HVG set used to build the trajectory), which we do by fitting GAMs using their `findDynGenes()` function. A quirk of the `epoch` method is that it's necessary to provide the cluster structure of the trajectory - in order, which we do based on @fig-umap_MST. Next, we construct the GRN & perform crossweighting - the goal of which is to reduce the occurrence of false positives (see their Methods for details). 
+
+::: {.callout-note}
+The authors show in their paper (see e.g., Figure 2) that the mutual information (MI) method with crossweighting is the best. However, their MI implementation is very slow, so I'm opting to use the Pearson correlation implementation instead. 
+:::
+
+```{r}
+#| message: false
+#| warning: false
+epoch_expr_mat_lin1 <- as.matrix(seu@assays$RNA$data[VariableFeatures(seu), !is.na(sling_pt$Lineage1)])
+epoch_pt_df <- select(sling_pt, Lineage1) %>% 
+               mutate(leiden = seu$seurat_clusters) %>% 
+               filter(!is.na(Lineage1)) %>% 
+               as.data.frame() %>% 
+               magrittr::set_rownames(colnames(epoch_expr_mat_lin1))
+epoch_models_lin1 <- findDynGenes(epoch_expr_mat_lin1, 
+                                  sampTab = epoch_pt_df, 
+                                  path = c("1", "6", "7", "4", "5"), 
+                                  group_column = "leiden", 
+                                  pseudotime_column = "Lineage1",
+                                  method = "gam")
+epoch_dyn_genes_lin1 <- names(epoch_models_lin1$genes)[epoch_models_lin1$genes < 0.01]
+epoch_dyn_genes_lin1 <- na.omit(epoch_dyn_genes_lin1)
+epoch_GRN_lin1 <- reconstructGRN(epoch_expr_mat_lin1, 
+                                 tfs = tx_factors, 
+                                 dgenes = epoch_dyn_genes_lin1, 
+                                 method = "pearson")
+epoch_GRN_lin1 <- crossweight(epoch_GRN_lin1, 
+                              expDat = epoch_expr_mat_lin1, 
+                              xdyn = epoch_models_lin1)
+```
+
+The results are shown below: 
+
+```{r}
+#| code-fold: true
+#| tbl-cap: A sample of the GRN output for lineage 1 from `epoch`. 
+#| label: tbl-epoch_GRN_lin1
+slice_sample(epoch_GRN_lin1, n = 10) %>% 
+  kableExtra::kable(digits = 2, 
+                    row.names = FALSE, 
+                    booktabs = TRUE, 
+                    col.names = c("Target Gene", "TF", "Z-score", "Pearson Cor.", "Offset", "Weighted Score")) %>% 
+  kableExtra::kable_classic(full_width = FALSE, c("hover"))
+```
+
+We repeat the process for lineage 2, again using the cluster structure shown in @fig-umap_MST when identifying dynamic genes. 
+
+```{r}
+#| message: false
+#| warning: false
+epoch_expr_mat_lin2 <- as.matrix(seu@assays$RNA$data[VariableFeatures(seu), !is.na(sling_pt$Lineage2)])
+epoch_pt_df <- select(sling_pt, Lineage2) %>% 
+               mutate(leiden = seu$seurat_clusters) %>% 
+               filter(!is.na(Lineage2)) %>% 
+               as.data.frame() %>% 
+               magrittr::set_rownames(colnames(epoch_expr_mat_lin2))
+epoch_models_lin2 <- findDynGenes(epoch_expr_mat_lin2, 
+                                  sampTab = epoch_pt_df, 
+                                  path = c("1", "6", "2", "3"), 
+                                  group_column = "leiden", 
+                                  pseudotime_column = "Lineage2",
+                                  method = "gam")
+epoch_dyn_genes_lin2 <- names(epoch_models_lin2$genes)[epoch_models_lin2$genes < 0.01]
+epoch_dyn_genes_lin2 <- na.omit(epoch_dyn_genes_lin2)
+epoch_GRN_lin2 <- reconstructGRN(epoch_expr_mat_lin2, 
+                                 tfs = tx_factors, 
+                                 dgenes = epoch_dyn_genes_lin2, 
+                                 method = "pearson")
+epoch_GRN_lin2 <- crossweight(epoch_GRN_lin2, 
+                              expDat = epoch_expr_mat_lin2, 
+                              xdyn = epoch_models_lin2)
+```
+
+
+# Conclusions {#sec-conclusions}
+
+XXX
+
+```{r}
+seu <- readRDS("../../datasets/GRN_sim/seu.Rds")
+sling_res <- readRDS("../../datasets/GRN_sim/sling_res.Rds")
+epoch_GRN_lin1 <- readRDS("../../datasets/GRN_sim/epoch_GRN_lin1.Rds")
+epoch_GRN_lin2 <- readRDS("../../datasets/GRN_sim/epoch_GRN_lin2.Rds")
+GRN_all <- readRDS("../../datasets/GRN_sim/GRN_all.Rds")
+scLANE_models <- readRDS("../../datasets/GRN_sim/scLANE_models.Rds")
+```
+
+
+# Session info {#sec-SI}
+
+```{r}
+sessioninfo::session_info()
+```
