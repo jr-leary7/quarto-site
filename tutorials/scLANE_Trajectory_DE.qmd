@@ -223,11 +223,10 @@ p0 <- Embeddings(seu, "umap") %>%
                  alpha = 0.75, 
                  stroke = 0) + 
       scale_color_manual(values = palette_cluster) + 
-      labs(color = "Leiden Cluster") + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           color = "Leiden") + 
       theme_scLANE(umap = TRUE) + 
-      theme(plot.title = element_blank(), 
-            axis.title = element_blank(), 
-            axis.line.x = element_blank()) + 
       guide_umap()
 p1 <- Embeddings(seu, "umap") %>% 
       as.data.frame() %>% 
@@ -242,10 +241,9 @@ p1 <- Embeddings(seu, "umap") %>%
            y = "UMAP 2", 
            color = "Celltype") + 
       theme_scLANE(umap = TRUE) + 
-      theme(plot.title = element_blank()) + 
       guide_umap()
 p2 <- (p0 / p1) +
-      plot_layout(guides = "collect")
+      plot_layout(guides = "collect", axes = "collect")
 p2
 ```
 
@@ -283,20 +281,20 @@ p3 <- Embeddings(seu, "umap") %>%
       geom_point(size = 1.5, 
                  alpha = 0.75, 
                  stroke = 0) + 
-      labs(color = "Pseudotime") + 
+      labs(x = "UMAP 1", 
+           y = "UMAP 2", 
+           color = "Pseudotime") + 
       scale_color_gradientn(colors = palette_heatmap, 
                             labels = scales::label_number(accuracy = 0.01)) + 
-      theme_scLANE(umap = TRUE) +
-      theme(axis.title = element_blank(), 
-            axis.line.x = element_blank())
+      theme_scLANE(umap = TRUE)
 p4 <- (p3 / p1) + 
-      plot_layout(guides = "collect")
+      plot_layout(guides = "collect", axes = "collect")
 p4
 ```
 
 ## Trajectory DE testing
 
-Next, we prepare the primary inputs to `scLANE`: our `Seurat` object with the spliced counts set as the default assay, a dataframe containing our estimated pseudotime ordering, a vector of size factors to use as an offset in each model, and a set of genes whose dynamics we want to model. `scLANE` parallelizes over genes in order to speed up the computation at the expense of using a little more memory. The models are fit using NB GLMs with optimal spline knots identified empirically, and differential expression is quantified using a likelihood ratio test of the fitted model vs. a constant (intercept-only) model. In practice, genes designated as HVGs are usually the best candidates for modeling, so we choose the top 3,000 HVGs as our input. 
+Next, we prepare the primary inputs to `scLANE`: our `Seurat` object with the spliced counts set as the default assay, a dataframe containing our estimated pseudotime ordering, a vector of size factors to use as an offset for sequencing depth in each model, and a set of genes whose dynamics we want to model. `scLANE` parallelizes over genes in order to speed up the computation at the expense of using a little more memory. The models are fit using NB GLMs with optimal spline knots identified empirically, and differential expression is quantified using a likelihood ratio test of the fitted model vs. a constant (intercept-only) model. In practice, genes designated as HVGs are usually the best candidates for modeling, so we choose the top 3,000 HVGs as our input. 
 
 ::: {.callout-note}
 The testing of the HVG set on its own is also justified by the reality that almost all trajectories are inferred using some sort of dimension-reduced space, and those embeddings are nearly universally generated using a set of HVGs. As such, genes not included in the HVG set actually have no direct relationship with the estimated trajectory, & it's generally safe to exclude them from trajectory analyses. 
@@ -503,10 +501,11 @@ p8 <- ggplot(knot_df, aes(x = knot)) +
                    color = "deepskyblue4", 
                    linewidth = 1) + 
       scale_x_continuous(limits = c(0, 1), labels = scales::label_number(accuracy = 0.01)) + 
+      labs(x = "Pseudotime") + 
       theme_scLANE() + 
-      theme(axis.title = element_blank(), 
-            axis.text = element_blank(), 
-            axis.ticks.y = element_blank())
+      theme(axis.ticks.y = element_blank(), 
+            axis.title.y = element_blank(), 
+            axis.text.y = element_blank())
 p9 <- data.frame(celltype = seu$celltype, 
                  pt = seu$sling_pt) %>% 
       ggplot(aes(x = pt, y = celltype, fill = celltype, color = celltype)) + 
@@ -520,7 +519,7 @@ p9 <- data.frame(celltype = seu$celltype,
             legend.title = element_blank()) + 
       guide_umap()
 p10 <- (p8 / p9) + 
-       plot_layout(heights = c(1/4, 3/4))
+       plot_layout(heights = c(1/4, 3/4), axes = "collect")
 p10
 ```
 
@@ -692,16 +691,14 @@ mutate(enrich_res$result,
 We can use the `geneProgramScoring()` function to add module scores for each gene cluster to our `Seurat` object. 
 
 ```{r}
-program_labels <- c("organogenesis", 
-                    "secretion", 
-                    "peptide production", 
-                    "regulation of organogenesis", 
-                    "differentiation", 
-                    "cell cycle")
+peptide_program <- filter(enrich_res$result, term_name == "peptide hormone secretion") %>% 
+                   arrange(p_value) %>% 
+                   slice_head(n = 1) %>% 
+                   pull(query)
+peptide_program_name <- gsub("Leiden_", "cluster_", peptide_program)
 seu <- geneProgramScoring(seu, 
                           genes = gene_embed$gene, 
-                          gene.clusters = gene_embed$leiden, 
-                          program.labels = program_labels)
+                          gene.clusters = gene_embed$leiden)
 ```
 
 Visualizing the scores on our UMAP embedding shows us that the peptide program is highly-enriched only in mature endocrine cells. This makes sense biologically as mature endocrine celltypes' primary roles are to produce peptides such as glucagon (alpha cells), insulin (beta cells), somatostatin (ductal cells), and pancreatic polypeptide (gamma cells). 
@@ -713,17 +710,17 @@ Visualizing the scores on our UMAP embedding shows us that the peptide program i
 p13 <- Embeddings(seu, "umap") %>% 
        as.data.frame() %>% 
        magrittr::set_colnames(c("UMAP_1", "UMAP_2")) %>% 
-       mutate(peptide_program_score = seu$peptide_production) %>% 
+       mutate(peptide_program_score = seu@meta.data[, peptide_program_name]) %>% 
        ggplot(aes(x = UMAP_1, y = UMAP_2, color = peptide_program_score)) + 
        geom_point(size = 1.5, alpha = 0.75, stroke = 0) + 
-       labs(color = "Program Score") + 
+       labs(x = "UMAP 1", 
+            y = "UMAP 2", 
+            color = "Program Score") + 
        scale_color_gradientn(colors = palette_heatmap, 
                              labels = scales::label_number(accuracy = 0.1)) + 
-       theme_scLANE(umap = TRUE) + 
-       theme(axis.title = element_blank(), 
-             axis.line.x = element_blank())
+       theme_scLANE(umap = TRUE) 
 p14 <- (p13 / p1) + 
-       plot_layout(guides = "collect")
+       plot_layout(guides = "collect", axes = "collect")
 p14
 ```
 
@@ -735,7 +732,7 @@ We can also visualize the trend in the peptide program scores over time, which c
 #| fig-cap: Peptide production gene program scores over pseudotime. 
 #| label: fig-peptide_smoother
 p15 <- data.frame(PT = sling_pt$PT, 
-                  peptide_program_score = seu$peptide_production, 
+                  peptide_program_score = seu@meta.data[, peptide_program_name], 
                   celltype = seu$celltype) %>% 
        ggplot(aes(x = PT, y = peptide_program_score, color = celltype)) + 
        geom_point(alpha = 0.75, 
@@ -757,11 +754,11 @@ Next, in order to identify which genes are "drivers" of a certain gene program, 
 ```{r}
 program_drivers <- geneProgramDrivers(seu, 
                                       genes = gene_embed$gene, 
-                                      gene.program = seu$peptide_production, 
+                                      gene.program = seu@meta.data[, peptide_program_name], 
                                       verbose = FALSE)
 ```
 
-We display the top 10 most-correlated genes here. For example, carboxypeptidase E (*Cpe*) is a known marker of pancreatic endocrine cells, and is involved in the regulation of peptide production.
+We display the top 10 most-correlated genes here. For example, carboxypeptidase E (*Cpe*) is involved in the production of insulin ([source](https://doi.org/10.1073/pnas.1323066111)). 
 
 ```{r}
 #| code-fold: true
@@ -775,7 +772,7 @@ slice_head(program_drivers, n = 10) %>%
   kableExtra::kable_classic(c("hover"), full_width = FALSE)
 ```
 
-Indeed, normalized expression of *Cpe* is high across all mature endocrine celltypes, with alpha cells showing the highest overall mean expression.
+Indeed, normalized expression of *Cpe* is high across all mature endocrine celltypes, with alpha and beta cells showing the highest overall mean expression.
 
 ```{r}
 #| code-fold: true
@@ -800,38 +797,6 @@ p16 <- data.frame(celltype = seu$celltype,
        theme_scLANE() + 
        theme(axis.title.x = element_blank())
 p16
-```
-
-Finally, we can use additive models to estimate the statistical significance of each gene program's enrichment across the trajectory. 
-
-```{r}
-prog_signif <- geneProgramSignificance(list(seu$peptide_production, 
-                                            seu$secretion, 
-                                            seu$cell_cycle, 
-                                            seu$differentiation, 
-                                            seu$regulation_of_organogenesis, 
-                                            seu$organogenesis), 
-                                       pt = sling_pt$PT, 
-                                       program.labels = c("Peptide production",
-                                                          "Secretion", 
-                                                          "Cell cycle", 
-                                                          "Differentiation", 
-                                                          "Regulation of organogenesis", 
-                                                          "Organogenesis"))
-```
-
-All six gene programs appear to be significantly associated with pseudotime. 
-
-```{r}
-#| code-fold: true
-#| tbl-cap: Significance testing for gene programs across the trajectory. 
-#| label: tbl-prog_signif
-kableExtra::kbl(prog_signif, 
-                digits = 4, 
-                booktabs = TRUE, 
-                row.names = FALSE,
-                col.names = c("Program", "LRT Statistic", "DF", "P-value", "Adj. P-value")) %>% 
-  kableExtra::kable_classic(c("hover"), full_width = FALSE)
 ```
 
 ## Dynamic gene enrichment

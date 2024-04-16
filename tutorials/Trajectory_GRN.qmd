@@ -874,7 +874,7 @@ grn_table_all <- bind_rows(grn_table_linA,
                          Mean_Rank)
 ```
 
-For each lineage we create a directed, weighted graph of the relationships between TFs and target genes using the `igraph` package. In the absence of a better, more sophisticated heuristic, we prune the graphs by selecting just the top 5 TFs per target gene. We use the inverse of the mean featuren importance rank as edge weights. 
+For each lineage we create a directed, weighted graph of the relationships between TFs and target genes using the `igraph` package. In the absence of a better, more sophisticated heuristic, we prune the graphs by selecting just the top 5 TFs per target gene. We use the inverse of the mean feature importance rank as edge weights. 
 
 ```{r}
 graph_df_linA <- select(grn_table_linA, 

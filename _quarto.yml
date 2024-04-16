@@ -9,7 +9,6 @@ project:
     - "!tutorials/Scaffold_Simulation.qmd"
     - "!tutorials/GLMM_Benchmarking.qmd"
     - "!tutorials/Integration_Tutorial.qmd"
-    - "!tutorials/GRN_Simulation.qmd"
 website:
   title: "Jack Leary"
   repo-url: https://github.com/jr-leary7/quarto-site
@@ -44,6 +43,7 @@ website:
           - tutorials/TF_Web_Scraping.qmd
           - tutorials/Neurogenesis_with_scLANE.qmd
           - tutorials/CellRank_Tutorial.qmd
+          - tutorials/GRN_Simulation.qmd
           - tutorials/GEE_Benchmarking.qmd
           - tutorials/Seurat_AnnData_Conversion.qmd
       - text: "Derivations"
@@ -55,6 +55,7 @@ website:
           - knowledge_base/scRNAseq.qmd
           - knowledge_base/R_Development.qmd
           - knowledge_base/scholarly_writing.qmd
+          - knowledge_base/LaTeX_tips.qmd
 
 format:
   html:

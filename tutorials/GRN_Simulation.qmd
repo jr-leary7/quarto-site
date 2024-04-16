@@ -178,7 +178,7 @@ estimateTGRN <- function(dyn.mat = NULL,
                dplyr::with_groups(Tx_Factor, 
                                   dplyr::mutate, 
                                   Frequency_Rank = dplyr::row_number()) %>% 
-               dplyr::arrange(Tx_Factor, desc(Gain)) %>% 
+               dplyr::arrange(Tx_Factor, dplyr::desc(Gain)) %>% 
                dplyr::with_groups(Tx_Factor, 
                                   dplyr::mutate, 
                                   Gain_Rank = dplyr::row_number()) %>% 
@@ -285,7 +285,7 @@ This extraordinarily messy (thanks to the large number of genes) plot shows our 
 #| code-fold: true
 #| fig-width: 8
 #| fig-height: 6
-#| fig-cap: The directed structure of all genes - TFs, target genes, and housekeeping genes. 
+#| fig-cap: The directed structure of the relationships between all genes - TFs, target genes, and housekeeping genes. 
 #| label: fig-str3
 p3 <- plot_feature_network(tf_model, show_hks = TRUE) + 
       labs(x = "Dim 1", 
@@ -566,8 +566,8 @@ scLANE_models <- testDynamic(seu,
                              pt = pt_df, 
                              genes = VariableFeatures(seu), 
                              size.factor.offset = cell_offset,
-                             n.cores = 4L, 
-                             verbose = TRUE)
+                             n.cores = 6L, 
+                             verbose = FALSE)
 scLANE_de_res <- getResultsDE(scLANE_models)
 ```
 
@@ -602,13 +602,12 @@ gene_dynamics <- smoothedCountsMatrix(scLANE_models,
                                       size.factor.offset = cell_offset, 
                                       pt = pt_df,
                                       genes = dyn_genes, 
-                                      log1p.norm = TRUE, 
-                                      n.cores = 2L)
+                                      log1p.norm = TRUE)
 ```
 
 ## Building a GRN from scratch
 
-We'll start by building a GRN on our own without using external packages. The main logic comes from the function defined in @sec-fns. 
+We'll start by building a GRN on our own with `scTIRN` (**s**ingle **c**ell **T**rajectory **I**nference via **R**egulatory **N**etworks) without using external packages. The main logic comes from the function `estimateTGRN()` defined in @sec-fns.
 
 ```{r}
 tx_factors <- filter(seu@assays$RNA@meta.features, is_tf == TRUE) %>% 
@@ -629,55 +628,71 @@ GRN_lineage1 <- estimateTGRN(dyn.mat = gene_dynamics$Lineage_A,
                              expr.mat = as.matrix(t(seu@assays$RNA@data[colnames(gene_dynamics$Lineage_A), !is.na(pt_df$Lineage1)])), 
                              dyn.genes = colnames(gene_dynamics$Lineage_A), 
                              tx.factors = tx_factors,
-                             n.cores = 4L, 
-                             verbose = TRUE) %>% 
+                             n.cores = 6L, 
+                             verbose = FALSE) %>% 
                 mutate(Lineage = "Lineage1", .before = 1)
 GRN_lineage2 <- estimateTGRN(gene_dynamics$Lineage_B, 
                              expr.mat = as.matrix(t(seu@assays$RNA@data[colnames(gene_dynamics$Lineage_B), !is.na(pt_df$Lineage2)])), 
                              dyn.genes = colnames(gene_dynamics$Lineage_B), 
                              tx.factors = tx_factors,
-                             n.cores = 4L, 
-                             verbose = TRUE) %>% 
+                             n.cores = 6L, 
+                             verbose = FALSE) %>% 
                 mutate(Lineage = "Lineage2", .before = 1)
 GRN_all <- bind_rows(GRN_lineage1, GRN_lineage2) %>% 
-           arrange(Lineage, Tx_Factor, desc(Mean_Rank)) %>% 
-           with_groups(c(Lineage, Tx_Factor), 
+           arrange(Lineage, Target_Gene, desc(Mean_Rank)) %>% 
+           with_groups(c(Lineage, Target_Gene), 
                        slice_head, 
                        n = 10)
 ```
 
 ### Estimating accuracy
 
-Since our simulation only defines the network over the entire dataset, instead of in a lineage-specific manner, we'll define a "correct" GRN link as 
+Since our simulation only defines the network over the entire dataset, instead of in a lineage-specific manner, we'll define `scTIRN` as being correct if a given TF-target gene link is recovered in either of the two lineage GRNs. In addition, we'll define the directionality as being correct if it is correct in either lineage. 
 
 ```{r}
-scLANE_detected_vec <- scLANE_dir_vec_lin1 <- scLANE_dir_vec_lin2 <- vector("numeric", nrow(GRN_truth))
+scTIRN_detected_vec <- scTIRN_dir_vec_lin1 <- scTIRN_dir_vec_lin2 <- vector("numeric", nrow(GRN_truth))
 for (i in seq(nrow(GRN_truth))) {
   sub_df <- filter(GRN_all, 
-                   Tx_Factor == GRN_truth$Tx_Factor[i])
- scLANE_detected_vec[i] <- ifelse(nrow(sub_df > 0), 1, 0)
- scLANE_dir_vec_lin1 <- filter(GRN_lineage1, 
-                               Tx_Factor == GRN_truth$Tx_Factor[i], 
-                               Target_Gene == GRN_truth$Target_Gene[i]) %>% 
-                        pull(Dyn_Cor)
- scLANE_dir_vec_lin1[i] <- ifelse(length(scLANE_dir_vec_lin1) != 0, scLANE_dir_vec_lin1, NA_real_)
- scLANE_dir_vec_lin2 <- filter(GRN_lineage2, 
-                               Tx_Factor == GRN_truth$Tx_Factor[i], 
-                               Target_Gene == GRN_truth$Target_Gene[i]) %>% 
-                        pull(Dyn_Cor)
- scLANE_dir_vec_lin2[i] <- ifelse(length(scLANE_dir_vec_lin2) != 0, scLANE_dir_vec_lin2, NA_real_)
+                   Tx_Factor == GRN_truth$Tx_Factor[i], 
+                   Target_Gene == GRN_truth$Target_Gene[i])
+ scTIRN_detected_vec[i] <- ifelse(nrow(sub_df > 0), 1, 0)
+ scTIRN_dir_lin1 <- filter(GRN_lineage1, 
+                           Tx_Factor == GRN_truth$Tx_Factor[i], 
+                           Target_Gene == GRN_truth$Target_Gene[i]) %>% 
+                    pull(Dyn_Cor)
+ scTIRN_dir_vec_lin1[i] <- ifelse(length(scTIRN_dir_lin1) != 0, scTIRN_dir_lin1, NA_real_)
+ scTIRN_dir_lin2 <- filter(GRN_lineage2, 
+                           Tx_Factor == GRN_truth$Tx_Factor[i], 
+                           Target_Gene == GRN_truth$Target_Gene[i]) %>% 
+                    pull(Dyn_Cor)
+ scTIRN_dir_vec_lin2[i] <- ifelse(length(scTIRN_dir_lin1) != 0, scTIRN_dir_lin2, NA_real_)
 }
 GRN_truth <- mutate(GRN_truth, 
-                    scLANE_detected = scLANE_detected_vec, 
-                    scLANE_direction_lineage1 = scLANE_dir_vec_lin1,
-                    scLANE_direction_lineage2 = scLANE_dir_vec_lin2) %>% 
-             mutate(scLANE_dir_correct = case_when(effect == 1 & (scLANE_direction_lineage1 > 0 | scLANE_direction_lineage2 > 0) ~ 1, 
-                                               effect == -1 & (scLANE_direction_lineage1 < 0 | scLANE_direction_lineage2 < 0) ~ 1, 
-                                               TRUE ~ 0), 
-                    scLANE_fully_correct = if_else(scLANE_detected == 1 & scLANE_dir_correct == 1, 1, 0)) %>% View()
+                    scTIRN_detected = scTIRN_detected_vec, 
+                    scTIRN_direction_lineage1 = scTIRN_dir_vec_lin1,
+                    scTIRN_direction_lineage2 = scTIRN_dir_vec_lin2) %>% 
+             mutate(scTIRN_dir_correct = case_when(effect == 1 & (scTIRN_direction_lineage1 > 0 | scTIRN_direction_lineage2 > 0) ~ 1, 
+                                                   effect == -1 & (scTIRN_direction_lineage1 < 0 | scTIRN_direction_lineage2 < 0) ~ 1, 
+                                                   TRUE ~ 0), 
+                    scTIRN_fully_correct = if_else(scTIRN_detected == 1 & scTIRN_dir_correct == 1, 1, 0))
 ```
 
-## Fitting a GRN with `epoch`
+In order to correctly estimate the accuracy of `scTIRN`, we first filter the ground-truth GRN to just the genes identified by `scLANE` as being dynamic over the trajectory, then estimate the proportion of the true TF to target gene links identified by our method. The accuracy looks pretty good!
+
+```{r}
+#| code-fold: true
+#| tbl-cap: The accuracy of `scTIRN` when filtering to just the genes identified by `scLANE` as trajectory DE.
+#| label: tbl-acc-scTIRN
+filter(GRN_truth, Tx_Factor %in% dyn_genes) %>% 
+  summarise(mu = mean(scTIRN_detected) * 100) %>% 
+  kableExtra::kable(digits = 2, 
+                    col.names = "Accuracy",
+                    booktabs = TRUE, 
+                    align = "c") %>% 
+  kableExtra::kable_classic(full_width = FALSE, "hover")
+```
+
+## Building a GRN with `epoch`
 
 Next, we use the `epoch` R package ([paper](https://doi.org/10.1016/j.stemcr.2021.12.018), [GitHub](https://github.com/CahanLab/epoch/)) to estimate a GRN for each lineage using the Pearson correlation of expression between dynamic genes. We start by identifying a set of genes dynamic across lineage 1 (as with `scLANE`, we test solely the HVG set used to build the trajectory), which we do by fitting GAMs using their `findDynGenes()` function. A quirk of the `epoch` method is that it's necessary to provide the cluster structure of the trajectory - in order, which we do based on @fig-umap_MST. Next, we construct the GRN & perform crossweighting - the goal of which is to reduce the occurrence of false positives (see their Methods for details). 
 
@@ -688,6 +703,7 @@ The authors show in their paper (see e.g., Figure 2) that the mutual information
 ```{r}
 #| message: false
 #| warning: false
+#| results: hide
 epoch_expr_mat_lin1 <- as.matrix(seu@assays$RNA$data[VariableFeatures(seu), !is.na(sling_pt$Lineage1)])
 epoch_pt_df <- select(sling_pt, Lineage1) %>% 
                mutate(leiden = seu$seurat_clusters) %>% 
@@ -708,7 +724,8 @@ epoch_GRN_lin1 <- reconstructGRN(epoch_expr_mat_lin1,
                                  method = "pearson")
 epoch_GRN_lin1 <- crossweight(epoch_GRN_lin1, 
                               expDat = epoch_expr_mat_lin1, 
-                              xdyn = epoch_models_lin1)
+                              xdyn = epoch_models_lin1) %>% 
+                  mutate(Lineage = "Lineage1", .before = 1)
 ```
 
 The results are shown below: 
@@ -721,7 +738,7 @@ slice_sample(epoch_GRN_lin1, n = 10) %>%
   kableExtra::kable(digits = 2, 
                     row.names = FALSE, 
                     booktabs = TRUE, 
-                    col.names = c("Target Gene", "TF", "Z-score", "Pearson Cor.", "Offset", "Weighted Score")) %>% 
+                    col.names = c("Lineage", "Target Gene", "TF", "Z-score", "Pearson Corr.", "Offset", "Weighted Score")) %>% 
   kableExtra::kable_classic(full_width = FALSE, c("hover"))
 ```
 
@@ -730,6 +747,7 @@ We repeat the process for lineage 2, again using the cluster structure shown in 
 ```{r}
 #| message: false
 #| warning: false
+#| results: hide
 epoch_expr_mat_lin2 <- as.matrix(seu@assays$RNA$data[VariableFeatures(seu), !is.na(sling_pt$Lineage2)])
 epoch_pt_df <- select(sling_pt, Lineage2) %>% 
                mutate(leiden = seu$seurat_clusters) %>% 
@@ -750,23 +768,73 @@ epoch_GRN_lin2 <- reconstructGRN(epoch_expr_mat_lin2,
                                  method = "pearson")
 epoch_GRN_lin2 <- crossweight(epoch_GRN_lin2, 
                               expDat = epoch_expr_mat_lin2, 
-                              xdyn = epoch_models_lin2)
+                              xdyn = epoch_models_lin2) %>% 
+                  mutate(Lineage = "Lineage2", .before = 1)
+epoch_GRN_all <- bind_rows(epoch_GRN_lin1, epoch_GRN_lin2)
 ```
 
+### Estimating accuracy
+
+We compute the accuracy of `epoch` using the same method as we did for `scTIRN` i.e., by filtering the ground-truth GRN to just the genes identified as dynamic (across either lineage) by `epoch`. 
+
+```{r}
+epoch_detected_vec <- epoch_dir_vec_lin1 <- epoch_dir_vec_lin2 <- vector("numeric", nrow(GRN_truth))
+for (i in seq(nrow(GRN_truth))) {
+  sub_df <- filter(epoch_GRN_all, 
+                   TF == GRN_truth$Tx_Factor[i], 
+                   TG == GRN_truth$Target_Gene[i])
+ epoch_detected_vec[i] <- ifelse(nrow(sub_df > 0), 1, 0)
+ epoch_dir_vec_lin1 <- filter(epoch_GRN_lin1, 
+                              TF == GRN_truth$Tx_Factor[i], 
+                              TG == GRN_truth$Target_Gene[i]) %>% 
+                        pull(corr)
+ epoch_dir_vec_lin1[i] <- ifelse(length(epoch_dir_vec_lin1) != 0, epoch_dir_vec_lin1, NA_real_)
+ epoch_dir_vec_lin2 <- filter(epoch_GRN_lin2, 
+                               TF == GRN_truth$Tx_Factor[i], 
+                               TG == GRN_truth$Target_Gene[i]) %>% 
+                        pull(corr)
+ epoch_dir_vec_lin2[i] <- ifelse(length(epoch_dir_vec_lin2) != 0, epoch_dir_vec_lin2, NA_real_)
+}
+GRN_truth <- mutate(GRN_truth, 
+                    epoch_detected = epoch_detected_vec, 
+                    epoch_direction_lineage1 = epoch_dir_vec_lin1,
+                    epoch_direction_lineage2 = epoch_dir_vec_lin2) %>% 
+             mutate(epoch_dir_correct = case_when(effect == 1 & (epoch_direction_lineage1 > 0 | epoch_direction_lineage2 > 0) ~ 1, 
+                                                  effect == -1 & (epoch_direction_lineage1 < 0 | epoch_direction_lineage2 < 0) ~ 1, 
+                                                  TRUE ~ 0), 
+                    epoch_fully_correct = if_else(epoch_detected == 1 & epoch_dir_correct == 1, 1, 0))
+```
+
+`epoch` performs fairly well; compare its accuracy with that of `scTIRN` as shown in @tbl-acc-scTIRN. 
+
+```{r}
+#| code-fold: true
+#| tbl-cap: The accuracy of `epoch` when filtering to just the genes identified by `epoch` as trajectory DE.
+#| label: tbl-acc-epoch
+filter(GRN_truth, Tx_Factor %in% union(epoch_dyn_genes_lin1, epoch_dyn_genes_lin2)) %>% 
+  summarise(mu = mean(epoch_detected) * 100) %>% 
+  kableExtra::kable(digits = 2, 
+                    col.names = "Accuracy",
+                    booktabs = TRUE, 
+                    align = "c") %>% 
+  kableExtra::kable_classic(full_width = FALSE, "hover")
+```
 
 # Conclusions {#sec-conclusions}
 
-XXX
+Overall both methods perform well, each having an accuracy in the mid-80s. `scTIRN` performed slightly better, likely due to its usage of less-noisy gene dynamics instead of normalized expression to build each lineage's network. In addition, given that we utilized lineage-specific pseudotime from `slingshot` instead of the overall ground-truth pseudotime I imagine the performance of `scTIRN` could be improved if we were to use the ground-truth data instead - though this would lose the lineage specificity. Lastly, the `dyngen` package, while somewhat difficult to use, proved to be a useful tool in that it provides a granular, ground-truth GRN against which we can evaluate different GRN estimation methods. 
 
 ```{r}
+#| eval: false
+#| echo: false
 seu <- readRDS("../../datasets/GRN_sim/seu.Rds")
 sling_res <- readRDS("../../datasets/GRN_sim/sling_res.Rds")
 epoch_GRN_lin1 <- readRDS("../../datasets/GRN_sim/epoch_GRN_lin1.Rds")
 epoch_GRN_lin2 <- readRDS("../../datasets/GRN_sim/epoch_GRN_lin2.Rds")
+epoch_GRN_all <- readRDS("../../datasets/GRN_sim/epoch_GRN_all.Rds")
 GRN_all <- readRDS("../../datasets/GRN_sim/GRN_all.Rds")
 scLANE_models <- readRDS("../../datasets/GRN_sim/scLANE_models.Rds")
 ```
-
 
 # Session info {#sec-SI}
 

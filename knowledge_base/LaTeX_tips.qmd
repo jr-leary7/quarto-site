@@ -1,0 +1,90 @@
+---
+title: "LaTeX Tips & Tricks"
+author:
+  name: Jack Leary
+  email: j.leary@ufl.edu
+  orcid: 0009-0004-8821-3269
+  affiliations:
+    - name: University of Florida
+      department: Biostatistics 
+      city: Gainesville
+      state: FL
+date: today
+date-format: long
+format:
+  html:
+    code-fold: show
+    code-copy: true
+    code-tools: true
+    toc: true
+    toc-depth: 2
+    embed-resources: true
+    fig-format: retina
+    fig-width: 9
+    fig-height: 6
+    df-print: kable
+    link-external-newwindow: true
+    tbl-cap-location: bottom
+    fig-cap-location: bottom
+    number-sections: true
+execute: 
+  cache: true
+  freeze: auto
+---
+
+# Introduction 
+
+I've recently started using LaTeX more often, mostly for typesetting complex academic papers. LaTeX has a steep learning curve, but it has some great features - notably automatic placement of figures and tables, which in my opinion is works vastly better than having to place them manually in Word. In addition, the support for equations and equation numbering is excellent, and you can extend it via packages to do almost anything you want. While learning LaTeX I've run into some niche problems, the solutions to which I'll collate here so that I & others can reference them. 
+
+# Automatic figure resizing
+
+A common LaTeX issue is [floats](https://en.wikibooks.org/wiki/LaTeX/Floats,_Figures_and_Captions) (figures, tables, algorithms, etc.) or their captions running over the margins of the page. Of course it's possible to expand the margins of your page, but that might not be aesthetically pleasing, might not meet journal submission requirements, etc. Including the following lines in your document's preamble will use the `graphicx` package to automatically resize your figures to fit the margins of the page while maintaining the aspect ratio of the original figure.
+
+::: {.callout-note}
+This code was modified from the LaTeX preamble created when rendering a Quarto document to PDF. 
+:::
+
+```
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+```
+
+# Author affiliation blocks
+
+For any journal article submission it's necessary to include a list of authors, the departments they're affiliated with, and contact information. Unfortunately, there isn't a built-in way to indicate which author is the corresponding author. The below snippet adds a "fake" affiliation that does so in an aesthetically pleasing way. 
+
+```
+\author[1]{Author A}
+\author[1,*]{Author B}
+\affil[1]{Department of Biostatistics, University of Florida}
+\affil[*]{Correspondence: \href{mailto:authorb@ufl.edu}{authorb@ufl.edu}}
+```
+
+# Figure captions
+
+Getting your figure captions to look right can be a painstaking process. Many journals require that the figure label be in bold. We can use the `caption` package to make this happen. The below code will result in "**Figure 1.**" instead of "Figure 1:". 
+
+```
+\usepackage[labelfont=bf, labelsep=period]{caption}
+```
+
+When generating supplementary figures, you can change the label of each figure from **Figure 1.** to **Supplementary Figure 1.** like so:
+
+```
+\usepackage[labelfont=bf, labelsep=period, figurename=Supplementary~Figure]{caption}
+```
+
+# Tables
+
+Most papers have at least one or two tables. The default table style in LaTeX is pretty good, but the lines are a bit cramped. To add better spacing, use the following snippet in your preamble:
+
+```
+\renewcommand{\arraystretch}{1.5}
+```
