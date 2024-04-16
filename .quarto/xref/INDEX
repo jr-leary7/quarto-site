@@ -52,5 +52,11 @@
   },
   "tutorials/TF_Web_Scraping.qmd": {
     "TF_Web_Scraping.html": "d1010984"
+  },
+  "tutorials/GRN_Simulation.qmd": {
+    "GRN_Simulation.html": "69b7b999"
+  },
+  "knowledge_base/LaTeX_tips.qmd": {
+    "LaTeX_tips.html": "6e5dbfee"
   }
 }

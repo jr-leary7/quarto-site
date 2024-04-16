@@ -53,6 +53,7 @@ library(Seurat)                # scRNA-seq tools
 library(scLANE)                # trajectory DE
 library(ggplot2)               # pretty plots
 library(slingshot)             # pseudotime estimation
+library(patchwork)             # plot alignment
 library(SingleCellExperiment)  # scRNA-seq data structures
 ```
 
@@ -102,7 +103,7 @@ seu_brain <- NormalizeData(seu_brain, verbose = FALSE) %>%
                     approx = TRUE)
 ```
 
-We use [canonical correlation analysis integration](https://doi.org/10.1038/nbt.4096) to harmonize our samples. It's necessary to tweak a few of the nearest-neighbor-related parameters since some of our samples have few cells.  
+We use [canonical correlation analysis (CCA) integration](https://doi.org/10.1038/nbt.4096) to harmonize our samples. It's necessary to tweak a few of the nearest-neighbor-related parameters since some of our samples have few cells.  
 
 ```{r}
 #| message: false
@@ -378,7 +379,7 @@ p5 <- data.frame(Embeddings(seu_brain, "umap")) %>%
 p5
 ```
 
-### Pseuotime estimation
+### Pseudotime estimation
 
 We'll use the `Slingshot` package to fit principal curves through our UMAP embedding & estimate lineage-specific pseudotime. 
 
@@ -761,7 +762,7 @@ gene_embed_astro <- embedGenes(log1p(smoothed_counts$Lineage_B))
 gene_embed_opc <- embedGenes(log1p(smoothed_counts$Lineage_C))
 ```
 
-We can visualize the differing UMAP embeddings, showing heterogeneity across lineages:
+We can visualize the differing gene-level UMAP embeddings, showing heterogeneity across lineages:
 
 ```{r}
 #| code-fold: true
@@ -802,7 +803,7 @@ p15 <- ggplot(gene_embed_opc, aes(x = umap1, y = umap2, color = leiden)) +
             subtitle = "Oligodendrocyte Progenitor Lineage") + 
        theme_scLANE(umap = TRUE) + 
        guides(color = guide_legend(override.aes = list(size = 4, alpha = 1, stroke = 0.25)))
-p16 <- p13 + p14 + p15
+p16 <- p13 + p14 + p15 + plot_layout(axes = "collect")
 p16
 ```
 

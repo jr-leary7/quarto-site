@@ -208,6 +208,7 @@ int_model = scvi.model.SCVI(
 Finally we train a variational autoencoder (VAE) over 250 epochs to embed the cells in 20-dimensional latent space.  
  
 ```{python}
+#| warning: false
 #| results: hide
 int_model.train(
     early_stopping=True,
